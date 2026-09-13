@@ -1,0 +1,248 @@
+name: Release
+
+# 推送标签后,先从该提交的内核补丁构建双架构 sing-box,再测试和封装面板。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+env:
+  JBOX_REPO: aoxijy/J-box
+
+jobs:
+  geodata:
+    name: Freeze complete Geo snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch and verify GeoSite / GeoIP at one commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/bundle-geodata.py geodata
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geodata
+          path: geodata/
+          if-no-files-found: error
+
+  kernel:
+    name: Build kernel (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read kernel tool versions
+        id: versions
+        run: |
+          . scripts/singbox-tcp-dns-hotfix/versions.sh
+          echo "go=$SINGBOX_GO_VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.versions.outputs.go }}
+          cache: false
+      - name: Build complete static kernel from repository inputs
+        run: sh scripts/singbox-tcp-dns-hotfix/build.sh ${{ matrix.arch }} kernel-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ matrix.arch }}
+          path: kernel-build/sing-box-*-linux-${{ matrix.arch }}-musl/
+          if-no-files-found: error
+      - name: Checksum corresponding kernel source
+        if: matrix.arch == 'amd64'
+        run: |
+          cd kernel-build
+          for source in *-source.tar.gz; do sha256sum "$source" > "$source.sha256"; done
+      - uses: actions/upload-artifact@v4
+        if: matrix.arch == 'amd64'
+        with:
+          name: kernel-source
+          path: |
+            kernel-build/*-source.tar.gz
+            kernel-build/*-source.tar.gz.sha256
+          if-no-files-found: error
+
+  build:
+    name: Build (${{ matrix.arch }})
+    needs: [kernel, geodata]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            kernel: amd64
+          - arch: arm64
+            kernel: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      # build-release.sh 自己不装依赖(见其头部注释与 Task 5 brief 的 job 结构),
+      # 依赖安装是这一步的职责;装在 panel/ 下即可覆盖 panel 本体与 panel/server
+      # 这两个 pnpm workspace 成员(panel/pnpm-workspace.yaml)。
+      - name: Install panel dependencies
+        working-directory: panel
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Read kernel version
+        id: kernel-version
+        run: |
+          . scripts/singbox-tcp-dns-hotfix/versions.sh
+          echo "version=$SINGBOX_VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: kernel-${{ matrix.kernel }}
+          path: kernel-download
+      - name: Normalize kernel bundle path
+        run: |
+          set -eu
+          source_dir=$(dirname "$(find kernel-download -type f -name BUILD-INFO.json -print -quit)")
+          target_dir="kernel-build/sing-box-${{ steps.kernel-version.outputs.version }}-linux-${{ matrix.kernel }}-musl"
+          mkdir -p "$target_dir"
+          cp "$source_dir"/* "$target_dir"/
+      - uses: actions/download-artifact@v4
+        with:
+          name: kernel-amd64
+          path: runner-kernel
+      - name: Use this run's source-built kernel for config verification
+        run: |
+          mkdir -p panel/.tools
+          runner_kernel=$(find runner-kernel -type f -name sing-box -print -quit)
+          test -n "$runner_kernel"
+          install -m 0755 "$runner_kernel" panel/.tools/sing-box
+          panel/.tools/sing-box version
+
+      # 发版前先跑测试:发布流水线原本是唯一的 CI,却从不跑测试套件,于是"套件是红的"
+      # 拦不住发版(实际发生过:v0.1.2 就是在本地套件报 2 条失败的情况下打的 tag)。
+      # 两个架构的构建都会跑一遍——重复但便宜,而且任一失败都能拦住整个发布。
+      # sing-box check 用例依赖上一步放入 panel/.tools/sing-box,所以测试必须排在本次内核构建之后。
+      - name: Run server test suite
+        working-directory: panel
+        run: corepack pnpm run test:server
+
+      - name: Verify generated config against pinned sing-box
+        working-directory: panel
+        env:
+          CI: 'true'
+        run: corepack pnpm run check:config
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: geodata
+          path: geodata
+      - name: Build release tarball
+        env:
+          JBOX_VERSION: ${{ github.ref_name }}
+          JBOX_KERNEL_BUILD_DIR: ${{ github.workspace }}/kernel-build
+          JBOX_GEO_BUNDLE_DIR: ${{ github.workspace }}/geodata
+        run: bash scripts/build-release.sh ${{ matrix.arch }} dist-release
+
+      # build-release.sh 每个架构都产出两份内容完全一致的 tarball(+sha256):带版本号
+      # 的 j-box-<version>-linux-<arch>.tar.gz(留档)和不带版本号的
+      # j-box-linux-<arch>.tar.gz(install.sh / update.sh 靠这份稳定资产名通过
+      # releases/latest/download/<asset> 直链拿最新版,不查询 api.github.com——见
+      # Important 5)。这里用通配符收集 dist-release/ 下的全部 *.tar.gz / *.sha256,
+      # 两种命名都会被原样带到下面的 Release 里,不需要在这一步分别枚举文件名——
+      # 三处名字(build-release.sh 产出名 / 这里上传名 / install-update.sh 计算名)
+      # 保持一致的关键在 build-release.sh 与 install.sh/update.sh 两侧的命名规则,
+      # 而不是这里的通配符。
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: j-box-linux-${{ matrix.arch }}
+          path: |
+            dist-release/*.tar.gz
+            dist-release/*.sha256
+            dist-release/*components.json
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-release
+          merge-multiple: true
+          pattern: j-box-linux-*
+
+      - name: Download corresponding kernel source
+        uses: actions/download-artifact@v4
+        with:
+          name: kernel-source
+          path: dist-release
+
+      - name: List release assets
+        run: ls -la dist-release
+
+      # sing-box/Node 版本号只在 scripts/build-release.sh 里维护一份,这里现读现取,
+      # 避免版本号在脚本与发布说明里各写一份、迟早漂移。
+      - name: Compose release notes
+        run: |
+          set -eu
+          NODE_VERSION=$(grep -m1 '^NODE_VERSION=' scripts/build-release.sh | sed -E 's/^NODE_VERSION="([^"]+)"/\1/')
+          . scripts/singbox-tcp-dns-hotfix/versions.sh
+          {
+            echo "## J-Box ${{ github.ref_name }}"
+            echo ""
+            echo "- sing-box 内核版本:\`$SINGBOX_VERSION\`(从本次仓库源码补丁构建，完整 CGO/musl 静态链接)"
+            echo "- Node 运行时版本:\`$NODE_VERSION\`(musl 构建,glibc 版本在 OpenWrt 上无法运行)"
+            echo ""
+            echo "- 完整安装包包含 sing-box 内核与全部 GeoSite / GeoIP 数据，首次启动无需另行下载 Geo 数据。"
+            echo "- 升级先校验组件版本及文件，仅下载变化或损坏的组件；全部从本仓库 Release 获取。"
+            echo ""
+            echo "### 硬件要求"
+            echo ""
+            echo "- CPU 架构:x86_64 或 arm64(aarch64)"
+            echo "- 可用存储:≥ 512MB"
+            echo "- 可用内存:≥ 512MB"
+            echo "- 系统:OpenWrt"
+            echo ""
+            echo "### 一键安装"
+            echo ""
+            echo '```bash'
+            echo "# 直连版"
+            echo "curl -fsSL https://raw.githubusercontent.com/${JBOX_REPO}/main/scripts/install.sh | sh"
+            echo ""
+            echo "# 镜像加速版(把 <镜像前缀> 换成你信任的加速站点域名)"
+            echo "curl -fsSL https://<镜像前缀>/https://raw.githubusercontent.com/${JBOX_REPO}/main/scripts/install.sh | sh -s -- --mirror <镜像前缀>"
+            echo '```'
+            echo ""
+            echo "完整安装 / 升级 / 卸载说明见仓库根目录 README。"
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: J-Box ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          fail_on_unmatched_files: true
+          files: |
+            dist-release/*.tar.gz
+            dist-release/*.sha256
+            dist-release/*components.json

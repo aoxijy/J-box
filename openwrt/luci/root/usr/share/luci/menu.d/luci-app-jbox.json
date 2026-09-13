@@ -1,0 +1,8 @@
+{
+	"admin/services/jbox": {
+		"title": "J-Box",
+		"order": 30,
+		"action": { "type": "view", "path": "jbox/status" },
+		"depends": { "acl": [ "luci-app-jbox" ] }
+	}
+}

@@ -1,0 +1,29 @@
+export const createPaths = (root = '/opt/j-box') => ({
+  root,
+  bin: `${root}/bin`,
+  singbox: `${root}/bin/sing-box`,
+  etc: `${root}/etc`,
+  configPath: `${root}/etc/config.json`,
+  // 共享网络的自签证书(system/tls-keypair.mjs)
+  certsDir: `${root}/etc/certs`,
+  tlsCert: `${root}/etc/certs/server.crt`,
+  tlsKey: `${root}/etc/certs/server.key`,
+  dataDir: `${root}/data`,
+  rulesetDir: `${root}/data/rulesets`,
+  geoDir: `${root}/panel/server/resources/geodata`,
+  // 内核的 cache_file:记住各 selector 的选择,重启不丢
+  cacheDb: `${root}/data/cache.db`,
+  metaPath: `${root}/meta.json`,
+  updateScript: `${root}/update.sh`,
+  channelPath: `${root}/data/channel`,
+  // 和 scripts/update.sh 里 STATUS_PATH / UPDATE_LOG 的默认值一致(TMPDIR 未设置时)
+  updateStatusPath: '/tmp/jbox-update.status',
+  // OpenWrt dnsmasq 的 DHCP 租约表,每日流量「访问终端」用它把 IP 翻成主机名
+  dhcpLeases: '/tmp/dhcp.leases',
+  updateLogPath: '/tmp/jbox-update.log',
+  geoUpdateStatePath: `${root}/data/geo-update.json`,
+  scheduleStatePath: `${root}/data/schedule-state.json`,
+  // DNS 过滤名单自己的计划状态,避免和 J-Box / Geo / 订阅调度同时写共享 JSON 时互相覆盖。
+  dnsFilterScheduleStatePath: `${root}/data/dns-filter-schedule.json`,
+  initd: { core: '/etc/init.d/jbox', panel: '/etc/init.d/jbox-panel' },
+})

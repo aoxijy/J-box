@@ -1,0 +1,20 @@
+{
+	"luci-app-jbox": {
+		"description": "Grant access to J-Box service controls",
+		"read": {
+			"ubus": { "luci": [ "getInitList" ], "service": [ "list" ] },
+			"file": {
+				"/opt/j-box/meta.json": [ "read" ],
+				"/tmp/jbox-update.log": [ "read" ],
+				"/tmp/jbox-update.status": [ "read" ]
+			}
+		},
+		"write": {
+			"ubus": { "luci": [ "setInitAction" ] },
+			"file": {
+				"/opt/j-box/uninstall.sh": [ "exec" ],
+				"/opt/j-box/update.sh": [ "exec" ]
+			}
+		}
+	}
+}
