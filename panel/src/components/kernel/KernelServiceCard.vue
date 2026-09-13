@@ -172,9 +172,14 @@ import {
   useKernelActions,
 } from '@/composables/kernelService'
 import { refreshUpdateInfo, updateInfo } from '@/composables/jboxUpdate'
-import logoUrl from '@/assets/logo.png'
+import logoDark from '@/assets/logo-dark.png'
+import logoLight from '@/assets/logo.png'
+import { DARK_THEME, theme } from '@/store/settings'
 import { ArrowPathIcon, ArrowTopRightOnSquareIcon, CpuChipIcon, ExclamationTriangleIcon, PlayIcon, StopIcon } from '@heroicons/vue/24/outline'
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+
+// 亮/暗两套字标跟随主题切换(理由见 SidebarHeader.vue)
+const logoUrl = computed(() => (theme.value === DARK_THEME ? logoDark : logoLight))
 
 // 标题行右边的版本号来自更新状态(同页的更新卡片也会拉;这里没有就自己拉一次)
 onMounted(() => {

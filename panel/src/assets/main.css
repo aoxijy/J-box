@@ -854,6 +854,5 @@ div::-webkit-scrollbar-thumb:hover {
   background-blend-mode: multiply;
 }
 
-[data-theme='forest'] .app-logo {
-  filter: invert(1) hue-rotate(180deg);
-}
+/* 标识不再靠反色滤镜适配暗色主题:J 图标是彩色渐变,invert+hue-rotate 会串色。
+   现在由组件按主题在 logo.png(深色字)/ logo-dark.png(浅色字)之间切换。 */

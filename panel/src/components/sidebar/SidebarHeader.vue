@@ -7,10 +7,10 @@
     class="flex h-9 shrink-0 items-center"
     :class="isSidebarCollapsed ? 'justify-center' : 'justify-between gap-2'"
   >
-    <!-- 产品标识(src/assets/logo.png,透明底)。只在展开时出现:折叠后这一列全是
+    <!-- 产品标识(透明底)。只在展开时出现:折叠后这一列全是
          单色的功能图标,中间夹一个彩色标识会打乱这条视觉线。
-         深色主题下墨迹是深藏青,在 forest 底色上几乎看不见,靠 main.css 里的滤镜整体
-         翻亮,绿橙两个点缀色不变。
+         亮/暗两套字标按当前主题切换:暗色(forest)下用浅色文字版,不再靠滤镜反色
+         (J 图标是彩色渐变,反色会串色)。
          版本号和发布日期不在这里显示了——「设置 → 后端设置」的更新卡片上就有 -->
     <img
       v-if="!isSidebarCollapsed"
@@ -47,6 +47,10 @@
 </template>
 
 <script setup lang="ts">
-import logoUrl from '@/assets/logo.png'
-import { isSidebarCollapsed } from '@/store/settings'
+import logoDark from '@/assets/logo-dark.png'
+import logoLight from '@/assets/logo.png'
+import { DARK_THEME, isSidebarCollapsed, theme } from '@/store/settings'
+import { computed } from 'vue'
+
+const logoUrl = computed(() => (theme.value === DARK_THEME ? logoDark : logoLight))
 </script>
