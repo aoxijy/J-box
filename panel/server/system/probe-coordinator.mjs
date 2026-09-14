@@ -100,7 +100,10 @@ export const createProbeCoordinator = ({
   }
 
   // 探测一个节点。force=true 一定真测(手动测速 / 超时复查);否则比 intervalMs 新就复用。
-  const probe = async (node, url, { intervalMs = 0, timeoutMs = 5000, force = false } = {}) => {
+  // kernelIntervalMs:发给内核的 force=false 去重窗口(默认与 intervalMs 相同)。
+  //   自动优选用默认值——内核 history 还新鲜时直接复用,不重测也不重选(这就是 300 秒间隔
+  //   真正生效的关键);故障转移传 0,因为它的健康判断必须拿到**当前**结果,不能吃旧值。
+  const probe = async (node, url, { intervalMs = 0, kernelIntervalMs = null, timeoutMs = 5000, force = false } = {}) => {
     if (!node || !url) return { ok: null, delay: 0, at: now(), reason: 'bad-args' }
     const key = keyOf(node, url)
     // 并发合并:同一个键在途时,后来的请求(包括 force)都等这一份结果。
@@ -115,7 +118,8 @@ export const createProbeCoordinator = ({
       }
     }
     misses += 1
-    const p = fetchResult(node, url, { timeoutMs, force, intervalMs })
+    const kernelInterval = kernelIntervalMs === null ? intervalMs : kernelIntervalMs
+    const p = fetchResult(node, url, { timeoutMs, force, intervalMs: kernelInterval })
       .then((result) => {
         entries.set(key, result)
         return result

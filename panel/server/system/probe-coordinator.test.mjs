@@ -95,6 +95,30 @@ test('seedFromProxies:面板重启后用内核 history 播种,窗口内不再重
   assert.equal(k.calls.length, 1)
 })
 
+test('kernelIntervalMs:故障转移只在面板侧复用,内核窗口给 0(健康判断必须拿当前结果)', async () => {
+  const k = kernel({ delays: { a: 12 } })
+  let clock = 3_000_000
+  const c = createProbeCoordinator({ store: memStore(), fetchImpl: k.fetchImpl, now: () => clock })
+  // 故障转移:协调器缓存窗口用组 interval(这里 5 秒),但发给内核的窗口是 0——不吃内核旧值
+  await c.probe('a', 'https://t/204', { intervalMs: 5000, kernelIntervalMs: 0, timeoutMs: 1000, force: false })
+  assert.equal(k.calls.length, 1)
+  assert.ok(k.calls[0].includes('force=false'))
+  assert.ok(k.calls[0].includes('interval=0'), k.calls[0])
+  // 窗口内另一个调用方(同一组/短周期组)复用面板侧结果,不再打内核
+  const reuse = await c.probe('a', 'https://t/204', { intervalMs: 5000, kernelIntervalMs: 0, force: false })
+  assert.equal(reuse.cached, true)
+  assert.equal(k.calls.length, 1)
+  // 超过窗口后重新问内核,窗口依然是 0
+  clock += 5001
+  await c.probe('a', 'https://t/204', { intervalMs: 5000, kernelIntervalMs: 0, force: false })
+  assert.equal(k.calls.length, 2)
+  assert.ok(k.calls[1].includes('interval=0'), k.calls[1])
+  // 不传 kernelIntervalMs 时窗口跟随 intervalMs(自动优选的定时探测)
+  clock += 300_001
+  await c.probe('a', 'https://t/204', { intervalMs: 300_000, force: false })
+  assert.ok(k.calls[2].includes('interval=300000'), k.calls[2])
+})
+
 test('失败结果同样是共享的:503/504 记成节点失败,接口错误记成未知', async () => {
   const k = kernel({ fail: new Set(['dead']) })
   const c = createProbeCoordinator({

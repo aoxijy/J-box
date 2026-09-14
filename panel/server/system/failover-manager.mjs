@@ -197,13 +197,14 @@ export const createFailoverManager = ({
     if (!res || !res.ok) throw new Error(`proxy ${tag} HTTP ${res ? res.status : 'none'}`)
     return res.json()
   }
-  // 单个节点的端到端探测:交给共享协调器(按「节点 + 测速地址」去重)。
+  // 单个节点的端到端探测:交给共享协调器(按「节点 + 测速地址」去重,短周期结果可复用)。
   // 超时会**立即复查一次**(item:故障转移遇到节点超时先复查):网络抖动不该让一个页签
   // 直接判失败——复查通过就当这轮通过、继续当前策略;复查仍失败才把失败交给下面的转移判断。
-  // 定时探测用 force=false(内核 history 还新鲜就直接复用,见 urltest-force.patch),
+  // 协调器的缓存窗口用本组 interval(和自动优选共享同一份结果);但发给内核的窗口是 0——
+  // 故障转移的健康判断必须拿到**当前**数据,不能因为内核 history 还新鲜就吃旧值。
   // 复查用 force=true 强制真测。
   const probeNode = async (tag, url, timeoutMs, intervalMs = 0) => {
-    const first = await probes.probe(tag, url, { intervalMs, timeoutMs, force: false })
+    const first = await probes.probe(tag, url, { intervalMs, kernelIntervalMs: 0, timeoutMs, force: false })
     if (first && first.ok === true) return first
     const again = await probes.probe(tag, url, { intervalMs: 0, timeoutMs, force: true })
     if (again && again.ok === true) return { ...again, retried: true }

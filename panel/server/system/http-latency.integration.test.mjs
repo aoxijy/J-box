@@ -16,6 +16,8 @@ import { createPaths } from './paths.mjs'
 import { configMetaPath } from './deploy.mjs'
 import { createFailoverManager } from './failover-manager.mjs'
 import { createLatencyScheduler } from './latency-scheduler.mjs'
+import { createLatencyHistory } from './latency-history.mjs'
+import { createProbeCoordinator } from './probe-coordinator.mjs'
 
 const binary = process.env.JBOX_TEST_SINGBOX || fileURLToPath(new URL('../../.tools/sing-box', import.meta.url))
 const inCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true'
@@ -143,23 +145,35 @@ test('真实 Clash API：HTTP 指定地址、手动选择、自动优选、故�
     assert.equal((await proxy('manual')).now, 'node-b')
   })
 
-  await t.test('自动优选与定时调度：当前节点失败，切到可用节点并返回新延迟', async () => {
+  await t.test('自动优选与定时调度：按真实叶子节点到点探测，force=false 内核复用不重测，失败记超时', async () => {
+    const ctx = createMockContext({ files: { [paths.configPath]: JSON.stringify(config) }, execResults: { 'pidof sing-box': { code: 1, stdout: '' } } })
+    const memory = new Map()
+    const store = { getRaw: (key) => memory.get(key), setRaw: (key, value) => memory.set(key, value) }
+    let clock = Date.now()
+    const toKernel = (target, init) => fetch(base + new URL(target).pathname + new URL(target).search, init)
+    const coordinator = createProbeCoordinator({ store, fetchImpl: toKernel, now: () => clock })
+    const history = createLatencyHistory({ store, now: () => clock })
+    const scheduler = createLatencyScheduler({ ctx, paths, store, history, coordinator, fetchImpl: toKernel, now: () => clock })
+
+    // 面板刚起来：内核 history 还新鲜，先播种，不立刻把每个节点重测一遍
+    assert.deepEqual((await scheduler.tick()).tested, [])
+    // 到点（组 interval 1 小时）后按真实叶子节点探测，而不是组标签 auto；kernelIntervalMs 默认等于
+    // 组 interval，force=false 让内核直接复用还新鲜的 history——既不重测也不重选
+    const before = nodes.map((node) => node.targets.length)
+    clock += 3_600_001
+    assert.deepEqual((await scheduler.tick()).tested.sort(), ['node-a', 'node-b'])
+    assert.deepEqual(nodes.map((node, i) => node.targets.length - before[i]), [0, 0, 0], '内核 history 还新鲜时 force=false 不重测')
+    assert.ok(history.get()['node-a'].at(-1).delay > 0)
+
+    // 当前节点失败：定时探测真的测一次（记一笔超时），自动组切到可用节点
     nodes[0].mode = 'down'
     assert.equal((await delay('node-a')).status, 503)
     await until(async () => (await proxy('auto')).now === 'node-b')
-    const result = await delay('auto')
-    assert.equal(result.status, 200)
-    assert.ok(result.body.delay > 0)
-    const ctx = createMockContext({ files: { [paths.configPath]: JSON.stringify(config) }, execResults: { 'pidof sing-box': { code: 1, stdout: '' } } })
-    const samples = []
-    const scheduler = createLatencyScheduler({
-      ctx, paths, store: {}, fetchImpl: (target, init) => fetch(base + new URL(target).pathname + new URL(target).search, init),
-      history: { recordFromProxies() {}, recordSamples(items) { samples.push(...items) } },
-    })
-    const tick = await scheduler.tick()
-    assert.deepEqual(tick.tested, ['auto'])
-    assert.ok(samples.some((s) => s.name === 'node-a' && s.delay === 0))
+    clock += 3_600_001
+    assert.deepEqual((await scheduler.tick()).tested.sort(), ['node-a', 'node-b'])
+    assert.equal(history.get()['node-a'].at(-1).delay, 0)
     assert.equal((await proxy('auto')).now, 'node-b')
+    assert.equal((await delay('auto')).status, 200)
   })
 
   await t.test('故障转移：组内换节点、阈值后换备用、全部失败拒绝、主用恢复后回切', async () => {
