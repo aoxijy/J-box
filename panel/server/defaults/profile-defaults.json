@@ -39,7 +39,7 @@
   "traffic": {
     "keepMonths": 3
   },
-  "testUrl": "http://www.gstatic.com/generate_204",
+  "testUrl": "https://www.google.com/generate_204",
   "directTestUrl": "http://connectivitycheck.platform.hicloud.com/generate_204",
   "customTestUrl": "https://api.openai.com/v1/models",
   "updates": {
@@ -246,7 +246,7 @@
     ],
     "fallback": "PROXY",
     "regionId": "cn",
-    "fallbackDefault": "direct",
+    "fallbackDefault": "亚洲-自动",
     "fallbackName": "漏网之鱼",
     "fallbackIcon": "misc:fish",
     "fallbackIconScale": 0

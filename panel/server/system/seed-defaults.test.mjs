@@ -51,6 +51,13 @@ test('全新安装同时写入默认档案(目标分流);已有 jbox/profile 或
   const names = defaults.routing.policies.map((p) => p.name)
   for (const n of ['AI', '社交聊天', '微软苹果', '国外媒体', '开发平台', '国外', 'Games', '国内', '拦截']) assert.ok(names.includes(n), n)
   assert.equal(defaults.routing.fallbackName, '漏网之鱼')
+  // 兜底不能是「直连」:没被站点集命中的域名会直连 + 拿上游 DNS 解析,被墙的那些就是污染/打不开
+  // (2026-09-14 现场:兜底=直连时 dns.final=dns-direct)。健康检查地址必须是 HTTPS:
+  // HTTP 的 gstatic 测不出 TLS / Google 系不通的节点,组会卡在坏节点上(实测真有这种节点)。
+  assert.notEqual(defaults.routing.fallbackDefault, 'direct', '兜底默认要走代理')
+  assert.match(String(defaults.testUrl), /^https:\/\//, '默认健康检查地址用 HTTPS')
+  assert.equal(defaults.dns.fakeIpForProxy, true, '走代理域名默认 FakeIP:客户端 DNS 不能依赖节点')
+  assert.equal(defaults.dns.mode, 'hijack', '默认 hijack:客户端 DNS 不经过 dnsmasq 那一跳')
   // 不带任何个人域名
   // 默认档案取自作者自己的路由器,发出去之前必须把个人域名摘干净
   const PERSONAL = /angeworld|opendoor|superdoor|wanhouse|wan\.family|ok1248/
