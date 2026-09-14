@@ -17,7 +17,7 @@ if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
   sleep 1
 fi
 
-PORT="$port" nohup node server/index.mjs >"$repo_root/.dev-panel.log" 2>&1 &
+PORT="$port" nohup node --max-http-header-size=65536 server/index.mjs >"$repo_root/.dev-panel.log" 2>&1 &
 echo $! >"$pid_file"
 
 for _ in $(seq 1 20); do
