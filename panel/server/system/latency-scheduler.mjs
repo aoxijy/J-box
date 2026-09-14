@@ -4,11 +4,21 @@
 // 之后只有连接真正经过它才启动定时器,超过 idle_timeout 没流量又停掉。闲置的组永远停在启动
 // 那一次结果上,用户设的检测间隔在没流量时不成立。这里由面板服务端按 interval 严格
 // 定时:每 tick 看一眼每个 urltest 组最近一轮是什么时候(自己记的,或者成员里最新的一条——
-// 内核启动自测、有流量时内核自己测都算),到点就调内核的组测速接口把这组测一遍。
+// 内核启动自测、有流量时内核自己测都算),到点把该测的成员逐个测一遍。
 //
-// 内核那个接口是 force=false 的:最近 interval 内测过的成员会被跳过,所以几个组共用的节点
-// 每个 interval 只测一次,代价 = 节点数,不是组数 × 节点数。测完再读一次 /proxies:有新结果
-// 的记进延迟历史;这轮该测(结果比 interval 老或本来就没有)却仍没有结果的成员就是超时,记 0。
+// 为什么按成员调 /proxies/<tag>/delay,而不是一次调 /group/<tag>/delay:
+// 内核(1.14 / experimental/clashapi/api_meta_group.go)的组测速接口走 URLTestGroup.URLTest,
+// 也就是 force=true——整组所有成员都要测,而且拿请求里的 timeout 当**整批**的上下文;单个成员
+// 的探测上限是内核常量。面板要按成员错峰(共用节点每个 interval 只测一次,代价 = 节点数,不是
+// 组数 × 节点数),传的 timeout 是单节点超时(5s),于是组测速刚跑完十几个节点就被取消:剩下
+// 没测到的成员在 URLTest 里被当成失败 DeleteURLTestHistory 删掉 history。下一次 Select 读不到
+// 当前节点的历史,就退化成"列表里第一个还有历史的成员",节点开始乱跳,而且被删掉的成员下一个
+// tick 又算"到点",组测速每 30 秒重发一次。实测 119 个成员的组,一次组测速调用后只剩 5~11 个
+// 成员还有 history,组每 20~40 秒换一次节点,用户设的 300 秒检测间隔形同虚设。
+// 单节点接口只动这一个节点的 history,不碰别人;内核随后照常对包含它的自动组重选。
+// (组接口仍留给面板上"测速当前选中节点"这类一次性的手动操作。)
+// 测完再读一次 /proxies:有新结果的记进延迟历史;这轮该测(结果比 interval 老或本来就没有)
+// 却仍没有结果的成员就是超时,记 0。
 import { CLASH_API_BASE } from '../api/penetration.mjs'
 import { processUptime } from './service.mjs'
 import { parseDuration } from '../engine/duration.mjs'
@@ -33,6 +43,20 @@ const withTimeout = async (fetchImpl, url, init, timeoutMs) => {
   } finally {
     clearTimeout(timer)
   }
+}
+
+// 有界并发跑一批任务,结果按下标一一对应(和内核自己的批测并发对齐)
+const mapLimit = async (items, limit, fn) => {
+  const out = new Array(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i], i)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
 }
 
 export const createLatencyScheduler = ({
@@ -74,12 +98,18 @@ export const createLatencyScheduler = ({
     return history.recordFromProxies(proxies, { kernelStartedAt: await kernelStart(), at: now() })
   }
 
-  // 组测速请求的等待上限:内核最多 10 个并发、每个成员最多 testTimeout,按这轮真要测的成员数算,
-  // 再留 15 秒余量。不能设成固定 20 秒——内核用这个请求的 ctx 跑批测,请求一断后面的成员就
-  // 不测了(正式路由器「所有-自动」212 个成员,以前每轮只测到一半)。
-  const KERNEL_CONCURRENCY = 10
-  const MAX_ROUND_WAIT_MS = 5 * 60_000
-  const roundWaitMs = (dueCount) => Math.min(MAX_ROUND_WAIT_MS, Math.ceil(dueCount / KERNEL_CONCURRENCY) * testTimeoutMs + 15_000)
+  // 单节点测速。true = 内核测通了(history 已写);false = 节点确实失败(503/504);null = 面板
+  // 这边请求本身失败 / 超时,结果未知——不能当成节点超时记 0,也不算测过(下个 tick 还会再来)。
+  const NODE_CONCURRENCY = 10
+  const testNode = async (tag, url) => {
+    try {
+      const res = await withTimeout(fetchImpl, `${CLASH_API_BASE}/proxies/${encodeURIComponent(tag)}/delay?url=${encodeURIComponent(url)}&timeout=${testTimeoutMs}`, { headers: headers() }, testTimeoutMs + 5000)
+      if (!res) return null
+      if (res.ok) return true
+      if (res.status === 503 || res.status === 504) return false
+      return null
+    } catch { return null }
+  }
 
   let inFlight = false
   const tick = async () => {
@@ -108,44 +138,36 @@ export const createLatencyScheduler = ({
       // 到点按成员算,不按组算:一个组里各成员上次测的时刻不一样(共用的成员可能刚被别的组测过,
       // 一轮里靠后的成员比靠前的晚一分钟),谁到了 interval 谁就该测。每个组都按此刻最新的
       // /proxies 判,前一个组刚测过的共用成员这里就不算到点。
-      // 内核的组测速是 force=false 的,没到 interval 的成员它自己会跳过,所以一次请求只测到点的。
       const at = now()
       const due = g.members.filter((m) => {
         const t = latestTime(proxies[m])
-        // 内核的 /group/<tag>/delay 返回成功后,节点 history 可能还没在下一次
-        // /proxies 里反映出来。面板自己的记录必须和内核时间取较新者,否则同一轮
-        // 后面的共享组会读到旧 history,把同一个节点再测一次。
+        // 内核测完后节点 history 可能还没在下一次 /proxies 里反映出来。面板自己的记录必须和
+        // 内核时间取较新者,否则同一轮后面的共享组会读到旧 history,把同一个节点再测一次。
         const since = Math.max(t, lastTested.get(m) || 0)
         return !since || at - since >= g.intervalMs
       })
       if (!due.length) continue
-      let ok = false
-      try {
-        const res = await withTimeout(fetchImpl, `${CLASH_API_BASE}/group/${encodeURIComponent(g.tag)}/delay?url=${encodeURIComponent(g.url)}&timeout=${testTimeoutMs}`, { headers: headers() }, roundWaitMs(due.length))
-        ok = Boolean(res && res.ok)
-        if (!ok) log(`[latency] 组 ${g.tag} 定时测速返回 HTTP ${res ? res.status : 'none'}`)
-      } catch (err) {
-        log(`[latency] 组 ${g.tag} 定时测速请求失败:${err instanceof Error ? err.message : err}`)
-      }
+      const results = await mapLimit(due, NODE_CONCURRENCY, (m) => testNode(m, g.url))
       tested.push(g.tag)
+      if (results.some((r) => r === null)) log(`[latency] 定时测速 ${g.tag}:部分成员的测速请求未完成`)
       // 测完马上读一次:新结果立刻进历史,后面的组也按新数据判要不要测
       try { proxies = await fetchProxies() } catch { break }
       history.recordFromProxies(proxies, { kernelStartedAt, at: now() })
-      // 这轮该测却仍没有结果的成员就是超时。请求中途断掉的那轮不判:没测到的成员不是超时
-      if (ok) {
-        const time = new Date(at).toISOString()
-        const samples = []
-        for (const m of due) {
-          lastTested.set(m, at)
-          const p = proxies[m]
-          if (!p || typeof p !== 'object') continue
-          if (Array.isArray(p.all) && p.all.length) continue
-          if (!latestTime(p)) samples.push({ name: m, time, delay: 0 })
-        }
-        history.recordSamples(samples)
-        timeouts.push(...samples.map((x) => x.name))
+      // 这轮该测却仍没有结果的成员就是超时。自己请求没完成的那个成员不判:结果未知,不是节点超时
+      const time = new Date(at).toISOString()
+      const samples = []
+      for (let i = 0; i < due.length; i++) {
+        if (results[i] === null) continue
+        const m = due[i]
+        lastTested.set(m, at)
+        const p = proxies[m]
+        if (!p || typeof p !== 'object') continue
+        if (Array.isArray(p.all) && p.all.length) continue
+        if (!latestTime(p)) samples.push({ name: m, time, delay: 0 })
       }
-      log(`[latency] 定时测速 ${g.tag}:测 ${due.length} 个${ok ? '' : '(请求未完成)'}`)
+      history.recordSamples(samples)
+      timeouts.push(...samples.map((x) => x.name))
+      log(`[latency] 定时测速 ${g.tag}:测 ${due.length} 个`)
     }
     return { tested, timeouts }
   }

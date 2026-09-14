@@ -40,19 +40,16 @@ const kernel = () => {
   let clock = T0
   const fetchImpl = async (url) => {
     calls.push(String(url))
-    if (String(url).includes('/proxies')) return { ok: true, status: 200, json: async () => ({ proxies: JSON.parse(JSON.stringify(proxies)) }) }
-    if (String(url).includes('/group/')) {
-      const tag = decodeURIComponent(String(url).split('/group/')[1].split('/delay')[0])
-      const g = config.outbounds.find((o) => o.tag === tag)
-      // force=false:最近 interval 内测过的成员跳过;其余成员按脚本:hk-3 一直超时(history 保持空),别的成功
-      for (const m of g.outbounds) {
-        const last = proxies[m].history[proxies[m].history.length - 1]
-        if (last && clock - Date.parse(last.time) < 300_000) continue
-        if (m === 'hk-3') proxies[m].history = []
-        else proxies[m].history = [{ time: iso(clock), delay: 100 + m.length }]
-      }
-      return { ok: true, status: 200, json: async () => ({}) }
+    const target = String(url)
+    // 单节点测速(内核 /proxies/<tag>/delay):只动这一个节点的 history
+    if (target.includes('/delay')) {
+      const tag = decodeURIComponent(target.match(/\/proxies\/([^/]+)\/delay/)[1])
+      if (tag === 'hk-3') { proxies[tag].history = []; return { ok: false, status: 504, json: async () => ({}) } }
+      const delay = 100 + tag.length
+      proxies[tag].history = [{ time: iso(clock), delay }]
+      return { ok: true, status: 200, json: async () => ({ delay }) }
     }
+    if (target.includes('/proxies')) return { ok: true, status: 200, json: async () => ({ proxies: JSON.parse(JSON.stringify(proxies)) }) }
     throw new Error('unexpected ' + url)
   }
   return { proxies, calls, fetchImpl, setClock: (t) => { clock = t }, now: () => clock }
@@ -76,7 +73,7 @@ test('到 interval 才测:成员最近一轮结果还新鲜就不发;到点发�
   const r1 = await s.tick()
   assert.deepEqual(r1.tested, ['香港-自动'])
   assert.deepEqual(r1.timeouts, ['hk-3'])
-  assert.equal(k.calls.filter((u) => u.includes('/group/')).length, 1)
+  assert.equal(k.calls.filter((u) => u.includes('/delay')).length, 1)
   assert.deepEqual(history.get()['hk-1'].map((x) => x.delay), [93])
   assert.deepEqual(history.get()['hk-3'].map((x) => x.delay), [0])
   // 5 分钟后:有结果的成员到点;hk-1 两组共用,「香港-自动」测完再读一次,「所有-自动」只剩 us-1 到点,
@@ -84,8 +81,8 @@ test('到 interval 才测:成员最近一轮结果还新鲜就不发;到点发�
   k.setClock(T0 + 5 * 60_000 + 1000)
   const r2 = await s.tick()
   assert.deepEqual(r2.tested, ['香港-自动', '所有-自动'])
-  assert.equal(k.calls.filter((u) => u.includes('/group/')).length, 3)
-  assert.ok(k.calls.some((u) => u.includes('/group/%E9%A6%99%E6%B8%AF-%E8%87%AA%E5%8A%A8/delay?url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&timeout=5000')))
+  assert.equal(k.calls.filter((u) => u.includes('/delay')).length, 4)
+  assert.ok(k.calls.some((u) => u.includes('/proxies/hk-1/delay?url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&timeout=5000')))
   assert.deepEqual(history.get()['hk-1'].map((x) => x.delay), [93, 104])
   assert.deepEqual(history.get()['hk-3'].map((x) => x.delay), [0])
   assert.deepEqual(r2.timeouts, [])
@@ -95,7 +92,7 @@ test('到 interval 才测:成员最近一轮结果还新鲜就不发;到点发�
   const r3 = await s.tick()
   assert.deepEqual(r3.tested, ['香港-自动'])
   assert.deepEqual(r3.timeouts, ['hk-3'])
-  assert.equal(k.calls.filter((u) => u.includes('/group/')).length, 4)
+  assert.equal(k.calls.filter((u) => u.includes('/delay')).length, 5)
   assert.deepEqual(history.get()['hk-3'].map((x) => x.delay), [0, 0])
   // T0+10m:hk-1 / hk-2 / us-1 到点,hk-3 才 4 分钟不到点
   k.setClock(T0 + 10 * 60_000 + 2000)
@@ -117,7 +114,7 @@ test('内核没在跑(/proxies 拿不到)→ 这个 tick 什么都不做;sync �
   k.setClock(T0 + 60_000)
   await up.sync()
   assert.deepEqual(history.get()['hk-1'].map((x) => x.delay), [93])
-  assert.ok(!k.calls.some((u) => u.includes('/group/')))
+  assert.ok(!k.calls.some((u) => u.includes('/delay')))
 })
 
 test('组测速请求中途失败(超时 / 断开)→ 不把没测到的成员记成超时;tick 叠着来时后一个直接跳过', async () => {
@@ -128,10 +125,11 @@ test('组测速请求中途失败(超时 / 断开)→ 不把没测到的成员�
   const proxies = { 'hk-1': { type: 'ss', history: [] }, 'hk-2': { type: 'ss', history: [] } }
   const cfg = { outbounds: [{ type: 'urltest', tag: 'G', url: 'https://t', interval: '5m', outbounds: ['hk-1', 'hk-2'] }] }
   const c2 = createMockContext({ files: { ...ctx.files, [paths.configPath]: JSON.stringify(cfg) }, execResults: { 'pidof sing-box': { code: 0, stdout: '123\n' } } })
+  const gate = new Promise((r) => { release = r })
   const fetchImpl = async (url) => {
-    if (String(url).includes('/proxies')) return { ok: true, status: 200, json: async () => ({ proxies }) }
-    // 组测速:挂住,直到外面放行才失败(模拟请求中断)
-    await new Promise((r) => { release = r })
+    if (!String(url).includes('/delay')) return { ok: true, status: 200, json: async () => ({ proxies }) }
+    // 单节点测速:挂住,直到外面放行才失败(模拟请求中断)
+    await gate
     throw new Error('aborted')
   }
   const s = createLatencyScheduler({ store, ctx: c2, paths, history, fetchImpl, now: () => T0 + 10 * 60_000, log: () => {} })
@@ -174,8 +172,9 @@ test('内核测速结果尚未写回 /proxies 时,共享节点也不被后一个
   const calls = []
   const fetchImpl = async (url) => {
     calls.push(String(url))
+    if (String(url).includes('/delay')) return { ok: true, status: 200, json: async () => ({ delay: 184 }) }
     if (String(url).includes('/proxies')) return { ok: true, status: 200, json: async () => ({ proxies: JSON.parse(JSON.stringify(proxies)) }) }
-    return { ok: true, status: 200, json: async () => ({ delay: 184 }) }
+    return { ok: true, status: 200, json: async () => ({}) }
   }
   const ctx = createMockContext({
     files: { [paths.configPath]: JSON.stringify(cfg), '/proc/123/stat': '123 (sing-box) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 100 0', '/proc/uptime': '1000 0' },
@@ -185,10 +184,10 @@ test('内核测速结果尚未写回 /proxies 时,共享节点也不被后一个
   const s = createLatencyScheduler({ store, ctx, paths, history: createLatencyHistory({ store, now: () => T0 + 5 * 60_000 + 30_000 }), fetchImpl, now: () => T0 + 5 * 60_000 + 30_000, log: () => {} })
   const result = await s.tick()
   assert.deepEqual(result.tested, ['A'])
-  assert.equal(calls.filter((u) => u.includes('/group/')).length, 1)
+  assert.equal(calls.filter((u) => u.includes('/delay')).length, 1)
 })
 
-test('组配置里的测速地址是 http:// 的,发给内核的组测速请求保留 HTTP', async () => {
+test('组配置里的测速地址是 http:// 的,发给内核的单节点测速请求保留 HTTP', async () => {
   const httpConfig = { outbounds: [
     { type: 'urltest', tag: 'CF', url: 'http://cp.cloudflare.com/generate_204', interval: '5m', outbounds: ['cf-1'] },
     { type: 'urltest', tag: '旧默认', url: 'http://www.gstatic.com/generate_204', interval: '5m', outbounds: ['cf-2'] },
@@ -196,6 +195,7 @@ test('组配置里的测速地址是 http:// 的,发给内核的组测速请求�
   const calls = []
   const fetchImpl = async (url) => {
     calls.push(String(url))
+    if (String(url).includes('/delay')) return { ok: true, status: 200, json: async () => ({}) }
     if (String(url).includes('/proxies')) return { ok: true, status: 200, json: async () => ({ proxies: { 'cf-1': { type: 'vless', history: [] }, 'cf-2': { type: 'vless', history: [] } } }) }
     return { ok: true, status: 200, json: async () => ({}) }
   }
@@ -206,9 +206,9 @@ test('组配置里的测速地址是 http:// 的,发给内核的组测速请求�
   const store = memStore()
   const s = createLatencyScheduler({ store, ctx, paths, history: createLatencyHistory({ store, now: () => T0 + 60_000 }), fetchImpl, now: () => T0 + 60_000, log: () => {} })
   await s.tick()
-  const groupCalls = calls.filter((u) => u.includes('/group/'))
-  assert.equal(groupCalls.length, 2)
-  assert.ok(groupCalls.some((u) => u.includes('/group/CF/delay?url=http%3A%2F%2Fcp.cloudflare.com%2Fgenerate_204&')), groupCalls.join('\n'))
-  assert.ok(groupCalls.some((u) => u.includes('url=http%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&')), groupCalls.join('\n'))
-  assert.ok(groupCalls.every((u) => u.includes('url=http%3A%2F%2F')))
+  const delayCalls = calls.filter((u) => u.includes('/delay'))
+  assert.equal(delayCalls.length, 2)
+  assert.ok(delayCalls.some((u) => u.includes('/proxies/cf-1/delay?url=http%3A%2F%2Fcp.cloudflare.com%2Fgenerate_204&')), delayCalls.join('\n'))
+  assert.ok(delayCalls.some((u) => u.includes('url=http%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&')), delayCalls.join('\n'))
+  assert.ok(delayCalls.every((u) => u.includes('url=http%3A%2F%2F')))
 })
