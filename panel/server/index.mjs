@@ -24,6 +24,7 @@ import { registerTrafficRoutes } from './api/traffic.mjs'
 import { registerLatencyHistoryRoutes } from './api/latency-history.mjs'
 import { createLatencyHistory } from './system/latency-history.mjs'
 import { createLatencyScheduler } from './system/latency-scheduler.mjs'
+import { createProbeCoordinator } from './system/probe-coordinator.mjs'
 import { createFailoverManager } from './system/failover-manager.mjs'
 import { createDnsRewriteServer } from './system/dns-rewrite-server.mjs'
 import { DNS_REWRITE_TAG, ensureDnsRewriteDefaults } from './engine/dns-rewrite.mjs'
@@ -1143,11 +1144,14 @@ registerTrafficRoutes(app, { collector: trafficCollector, ctx: jbCtx, paths: jbP
 // interval 测,闲置的组停在启动那一次;这里由面板按 interval 定时调内核测,结果记进 jbox/latency-history,
 // 所有浏览器共享。和流量采集一样只在 startServer 里启动。
 const latencyHistory = createLatencyHistory({ store })
-const latencyScheduler = createLatencyScheduler({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
+// 节点探测协调器(system/probe-coordinator.mjs):自动优选的定时探测与故障转移的健康检查
+// 共用同一份结果,按「节点 + 测速地址」去重,避免共享节点在几秒内被两条链路各测一遍
+const probeCoordinator = createProbeCoordinator({ store, fetchImpl: globalThis.fetch })
+const latencyScheduler = createLatencyScheduler({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, coordinator: probeCoordinator, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
 registerLatencyHistoryRoutes(app, { history: latencyHistory, scheduler: latencyScheduler })
 // 故障转移组的后台主备管理(system/failover-manager.mjs):按 config.meta.json 里的运行映射定期端到端探测各页签
 // 的节点、组内先恢复、组间按顺序转移、主用恢复后切回、全部失败切兜底拒绝。跟随服务端生命周期,浏览器关了照样跑
-const failoverManager = createFailoverManager({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
+const failoverManager = createFailoverManager({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, coordinator: probeCoordinator, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
 registerFailoverRoutes(app, { manager: failoverManager })
 // DNS 重写的应答服务(system/dns-rewrite-server.mjs):内核把命中重写源域名的查询交到 127.0.0.1:7854,这里按档案
 // 里此刻的规则生成答案;没命中的按直连侧上游(WAN 下发的 DNS)解析

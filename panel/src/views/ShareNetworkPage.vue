@@ -8,7 +8,7 @@
     >
       <button
         type="button"
-        class="btn btn-circle btn-sm"
+        class="btn btn-primary btn-sm btn-square"
         v-tip="$t('serverAdd')"
         :aria-label="$t('serverAdd')"
         @click="openCreate"
@@ -81,43 +81,43 @@
                   >
                 </div>
               </div>
-              <div class="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  class="btn btn-circle btn-sm"
-                  :disabled="!buildShareLink(s)"
-                  v-tip="$t('copyLink')"
-                  @click="copyText(buildShareLink(s))"
-                >
-                  <ClipboardDocumentIcon class="h-4 w-4" />
-                </button>
-                <!-- 电源键按状态变色:启用中绿色,停用后灰色(和站点集 / 节点管理一致) -->
-                <button
-                  type="button"
-                  class="btn btn-circle btn-sm"
-                  :class="s.enabled === false ? 'text-base-content/40' : 'text-success'"
-                  v-tip="$t(s.enabled === false ? 'groupEnable' : 'groupDisable')"
-                  @click="toggle(s)"
-                >
-                  <PowerIcon class="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-circle btn-sm"
-                  v-tip="$t('edit')"
-                  @click="openEdit(s)"
-                >
-                  <PencilSquareIcon class="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-circle btn-sm"
-                  v-tip="$t('delete')"
-                  @click="remove(s)"
-                >
-                  <TrashIcon class="h-4 w-4" />
-                </button>
-              </div>
+              <!-- 操作按钮和「终端分流」保持一致:ghost + 方形 + 小号,直接作为这一行的
+                   子元素(不另套 flex 容器),行距由卡片的 gap-2 统一给 -->
+              <button
+                type="button"
+                class="btn btn-ghost btn-square btn-sm"
+                :disabled="!buildShareLink(s)"
+                v-tip="$t('copyLink')"
+                @click="copyText(buildShareLink(s))"
+              >
+                <ClipboardDocumentIcon class="h-4 w-4" />
+              </button>
+              <!-- 电源键按状态变色:启用中绿色,停用后灰色(和站点集 / 节点管理一致) -->
+              <button
+                type="button"
+                class="btn btn-ghost btn-square btn-sm"
+                :class="s.enabled === false ? 'text-base-content/40' : 'text-success'"
+                v-tip="$t(s.enabled === false ? 'groupEnable' : 'groupDisable')"
+                @click="toggle(s)"
+              >
+                <PowerIcon class="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-square btn-sm"
+                v-tip="$t('edit')"
+                @click="openEdit(s)"
+              >
+                <PencilSquareIcon class="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-square btn-sm"
+                v-tip="$t('delete')"
+                @click="remove(s)"
+              >
+                <TrashIcon class="h-4 w-4" />
+              </button>
             </div>
           </template>
         </Draggable>

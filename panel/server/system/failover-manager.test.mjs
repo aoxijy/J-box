@@ -684,3 +684,52 @@ test('验收 A:用户把某个页签排到第一位(C/A/B)→ 第一次确认它
   assert.equal(group(mgr).currentLaneId, 'B', '关着「恢复后切回」:主用恢复不切回')
   assert.equal(k.calls.filter((c) => c.startsWith('PUT')).length, 3)
 })
+
+test('节点探测超时先立即复查一次:复查通过就当这轮通过,不触发页签转移', async () => {
+  const k = kernel(() => T0)
+  const store = memStore()
+  const ctx = createMockContext({ files: { [configMetaPath(paths)]: metaJson('v1') }, execResults: { 'pidof sing-box': { code: 1, stdout: '' } } })
+  const origin = k.fetchImpl
+  const firstFail = new Set(['a1', 'a2'])
+  const attempts = { a1: 0, a2: 0 }
+  const fetchImpl = async (url, init) => {
+    const m = /\/proxies\/([^/]+)\/delay\?/.exec(String(url).replace('http://127.0.0.1:9095', ''))
+    if (m && firstFail.has(m[1])) {
+      attempts[m[1]] += 1
+      if (attempts[m[1]] === 1) { k.proxies[m[1]].history = []; return { ok: false, status: 504, json: async () => ({}) } }
+      firstFail.delete(m[1])
+    }
+    return origin(url, init)
+  }
+  const mgr = createFailoverManager({ store, ctx, paths, fetchImpl, now: () => T0, log: () => {} })
+  await mgr.tick()
+  const g = mgr.status().groups[0]
+  assert.deepEqual(g.lanes.map((l) => l.health), ['up', 'up', 'up'])
+  assert.equal(g.lanes[0].nodes.a1.ok, true)
+  assert.equal(g.lanes[0].nodes.a1.retried, true)
+  assert.equal(attempts.a1, 2, '第一次超时后应复查一次')
+  assert.equal(g.status, 'ok')
+  assert.equal(k.now(), '__fo:fo1:A')
+})
+
+test('复查也超时才交给转移判断:主用两个节点都真失败(各首测 + 复查)后按阈值转移', async () => {
+  const k = kernel(() => T0)
+  const store = memStore()
+  const ctx = createMockContext({ files: { [configMetaPath(paths)]: metaJson('v1') }, execResults: { 'pidof sing-box': { code: 1, stdout: '' } } })
+  let clock = T0
+  const mgr = createFailoverManager({ store, ctx, paths, fetchImpl: k.fetchImpl, now: () => clock, log: () => {} })
+  await mgr.tick()
+  k.down.add('a1'); k.down.add('a2')
+  const countFor = (tag) => k.calls.filter((c) => c.includes(`/proxies/${tag}/delay`)).length
+  const before = { a1: countFor('a1'), a2: countFor('a2'), b1: countFor('b1') }
+  clock += 300_000
+  await mgr.tick()
+  const g = mgr.status().groups[0]
+  assert.equal(g.lanes[0].health, 'down')
+  assert.equal(g.lanes[0].nodes.a1.ok, false)
+  assert.equal(g.lanes[0].nodes.a1.retried, false)
+  // 真失败:两个节点各首测 + 复查一次;正常的备用节点只测一次
+  assert.equal(countFor('a1') - before.a1, 2)
+  assert.equal(countFor('a2') - before.a2, 2)
+  assert.equal(countFor('b1') - before.b1, 1)
+})

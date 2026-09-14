@@ -821,11 +821,19 @@ var STYLE_CSS =
 	'@media (max-width:640px){.ob-chan{grid-template-columns:1fr}}' +
 	'.ob-chan-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border:1px solid rgba(127,127,127,.2);border-radius:8px}' +
 	'.ob-chan-row:hover{background:rgba(127,127,127,.06)}' +
+	// 勾选框 / 单选框统一成同一套尺寸、边距、行高和点击区域:整行(<label>)自己当
+	// flex 行,点文字也能勾选;输入框固定 16×16,清掉主题给的 padding / 边框 /
+	// 外边距,让 flex 的 align-items:center 真正对上文字的中线。主题(Argon)会给
+	// 所有 input 加 padding / line-height / border / margin,原生勾选框带着这些会
+	// 比文字高出一截、圆点/对勾被压到基线以下(Windows 字体渲染下尤其明显)。
+	// 弹窗里的勾选框不在 .ob-chan-row 里,所以规则挂在控件自己的类 .ob-choice 上;
+	// 渠道单选行同时带 .ob-chan-radio 和 .ob-choice,两处的框尺寸和行高永远一致。
+	'.ob-choice{display:inline-flex;align-items:center;gap:.5em;min-width:0;cursor:pointer;line-height:1.4;min-height:1.6em}' +
+	'.ob-choice input[type=checkbox],.ob-choice input[type=radio],.ob-chan-row .ob-chan-radio input{flex:none;width:16px;height:16px;margin:0;padding:0;border:0;box-shadow:none;line-height:1;position:static;vertical-align:middle;cursor:pointer}' +
+	'.ob-choice input[type=checkbox],.ob-chan-row .ob-chan-radio input[type=checkbox]{border-radius:3px}' +
+	'.ob-choice input[type=radio],.ob-chan-row .ob-chan-radio input{border-radius:50%}' +
+	'.ob-choice > span{min-width:0}' +
 	'.ob-chan-radio{display:flex;align-items:center;gap:.5em;min-width:0;cursor:pointer}' +
-	// 主题(Argon)给所有 input 统一加了 padding / line-height / 边框 / 外边距,原生单选框
-	// 带着这些会比文字高出一截、圆点被压到文字基线以下(Windows 上尤其明显);这里
-	// 把它们全部还原、给个固定尺寸,让 flex 的 align-items:center 真正对上文字的中线
-	'.ob-chan-row .ob-chan-radio input{flex:none;width:16px;height:16px;margin:0;padding:0;border:0;border-radius:50%;box-shadow:none;line-height:1;position:static;vertical-align:middle;cursor:pointer}' +
 	'.ob-chan-name{line-height:1.3}' +
 	'.ob-chan-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
 	'.ob-chan-stat{margin-left:auto;font-size:.85em;opacity:.85;white-space:nowrap}' +
@@ -948,9 +956,15 @@ return view.extend({
 				// 撤销的是什么。
 				E('p', {}, tr('Remove J-Box from this router. Services are stopped, DNS and firewall changes are reverted, and the LuCI page disappears after the next refresh.')),
 				E('p', {}, tr('This cannot be undone. Continue?')),
-				E('div', { 'style': ROW + ';justify-content:flex-start;text-align:left' }, [
-					purgeBox,
-					E('label', { 'for': 'ob-purge' }, tr('Also delete data (subscriptions, password, rule sets)'))
+				// 勾选框 + 说明文字整行是一个 <label class="ob-choice">:尺寸、边距、
+				// 行高、点击区域都在 STYLE_CSS 里统一。以前是裸 checkbox 和 for=
+				// 的 label 平铺在 flex 行里,主题给 input 的 padding / line-height /
+				// margin 会把框顶得比文字高一截,不同主题与字体渲染下对不齐。
+				E('div', { 'style': 'display:flex;margin:.4em 0' }, [
+					E('label', { 'class': 'ob-choice', 'for': 'ob-purge' }, [
+						purgeBox,
+						E('span', {}, tr('Also delete data (subscriptions, password, rule sets)'))
+					])
 				]),
 				E('p', { 'style': 'opacity:.75;font-size:90%' },
 					tr('Keeping data lets a later re-install reuse it. Delete it for a completely fresh start.')),
@@ -1477,7 +1491,7 @@ return view.extend({
 				});
 				channelRadioEls[c.value] = radio;
 				var nameEl = E('span', { 'class': 'ob-chan-name' }, c.label);
-				var radioLabel = E('label', { 'class': 'ob-chan-radio', 'for': 'ob-chan-radio-' + i }, [ radio, nameEl ]);
+				var radioLabel = E('label', { 'class': 'ob-chan-radio ob-choice', 'for': 'ob-chan-radio-' + i }, [ radio, nameEl ]);
 				var statEl = E('span', { 'class': 'ob-chan-stat' }, channelStatusSuffix(c.value));
 				channelRowEls[c.value] = statEl;
 				var btn = E('button', { 'class': 'cbi-button cbi-button-neutral',

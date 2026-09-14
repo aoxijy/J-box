@@ -119,3 +119,35 @@ test('组不记超时:选中节点超时、别的成员还有结果 → 等它�
   nested.recordFromProxies(p2('A', [], [{ time: at(0), delay: 120 }]), { kernelStartedAt: K, at: T0 + 60_000 })
   assert.deepEqual(nested.get().S.map((s) => [s.delay, s.node]), [[100, 'A']])
 })
+
+test('组记录按配置的检测间隔去重:共享节点几十秒内被反复测到,时间线不再连着记同一节点', () => {
+  const h = createLatencyHistory({ store: memStore() })
+  // G 配的是 5 分钟;节点 A 被另一个 1 分钟的组共享(节点自己的时间线照常记)
+  const windowOf = (name) => (name === 'G' ? 300_000 : 60_000)
+  const proxies = { A: node([{ time: at(0), delay: 120 }]), G: { all: ['A'], now: 'A', history: [] } }
+  h.recordFromProxies(proxies, { kernelStartedAt: T0 - 3_600_000, at: T0, dedupeMsOf: windowOf })
+  assert.deepEqual(h.get().G, [{ time: at(0), delay: 120, node: 'A' }])
+  // 20 秒后同一节点又被测了一次:还在 G 的 5 分钟窗口内,组时间线不添第二笔
+  proxies.A = node([{ time: new Date(T0 + 20_000).toISOString(), delay: 150 }])
+  h.recordFromProxies(proxies, { kernelStartedAt: T0 - 3_600_000, at: T0 + 20_000, dedupeMsOf: windowOf })
+  assert.equal(h.get().G.length, 1)
+  assert.deepEqual(h.get().A.map((s) => s.delay), [120, 150])
+  // 过了窗口再来一笔,组时间线补上(仍然是同一个节点,但已经是下一次检测了)
+  proxies.A = node([{ time: new Date(T0 + 400_000).toISOString(), delay: 111 }])
+  h.recordFromProxies(proxies, { kernelStartedAt: T0 - 3_600_000, at: T0 + 400_000, dedupeMsOf: windowOf })
+  assert.deepEqual(h.get().G.map((s) => [s.delay, s.node]), [[120, 'A'], [111, 'A']])
+})
+
+test('窗口内的超时同样只留一笔:同一节点连续超时按组 interval 合并', () => {
+  const h = createLatencyHistory({ store: memStore() })
+  const windowOf = () => 300_000
+  const proxies = { A: node([{ time: at(0), delay: 120 }]), G: { all: ['A'], now: 'A', history: [] } }
+  h.recordFromProxies(proxies, { kernelStartedAt: T0 - 3_600_000, at: T0, dedupeMsOf: windowOf })
+  // 节点超时、组里没有别的成员有结果 → 记一笔组超时
+  const t30 = T0 + 30_000
+  h.recordFromProxies({ A: node([]), G: { all: ['A'], now: 'A', history: [] } }, { kernelStartedAt: T0 - 3_600_000, at: t30, dedupeMsOf: windowOf })
+  assert.deepEqual(h.get().G.map((s) => s.delay), [120, 0])
+  // 又过 40 秒还是超时:组超时在窗口内不重复记
+  h.recordFromProxies({ A: node([]), G: { all: ['A'], now: 'A', history: [] } }, { kernelStartedAt: T0 - 3_600_000, at: t30 + 40_000, dedupeMsOf: windowOf })
+  assert.deepEqual(h.get().G.map((s) => s.delay), [120, 0])
+})

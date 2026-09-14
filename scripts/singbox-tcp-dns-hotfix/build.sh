@@ -42,6 +42,9 @@ patch -p1 < "$hotfix_dir/http-latency.patch"
 # urltest 的探针原本不看状态码,任何 HTTP 应答都算可用;按地区封锁的站点(如 OpenAI)
 # 回 403 也会被判成「可用」。这个补丁把 403/451/511 当失败,见该补丁头部说明。
 patch -p1 < "$hotfix_dir/urltest-status.patch"
+# Clash API 的定时探测支持显式 force=false(history 还新鲜就直接复用,不重测也不重选),
+# 手动测速不带参数、仍然强制;见该补丁头部说明。
+patch -p1 < "$hotfix_dir/urltest-force.patch"
 cp "$hotfix_dir/tcp_short_connection_test.go" dns/transport/jbox_tcp_test.go
 cp "$hotfix_dir/http_latency_test.go" common/urltest/jbox_http_test.go
 

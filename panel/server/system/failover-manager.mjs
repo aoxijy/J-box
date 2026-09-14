@@ -11,7 +11,11 @@
 // 一轮检测(每个组按自己的 interval 到点跑):
 //   1. GET /proxies 确认内核可达、父组和页签引用都在(部署到一半、内核正在重启时不动手);
 //   2. 组内所有有效节点各测一次 GET /proxies/<节点>/delay(内核用这个节点出站真去访问测速地址,
-//      端到端;有界并发;同一节点被几个页签共用只测一次,同轮结果复用);
+//      端到端;有界并发;同一节点被几个页签共用只测一次,同轮结果复用)。这一步走的是
+//      system/probe-coordinator.mjs 的共享协调器,和自动优选的定时探测共用同一份结果——同一个
+//      节点不会被两条链路在几秒内各测一遍;定时探测带 force=false,节点 history 还新鲜时内核
+//      直接复用、不重测也不重选。**探测超时会立即复查一次**:复查通过就当这轮通过,继续当前
+//      策略;复查仍失败才把失败交给下面的转移判断(见 probeNode);
 //   3. 多节点页签有节点通过时调 GET /group/<子组>/delay 让内核按刚才的结果重选,再读回 now 确认
 //      内核实际选中的是通过检测的节点——确认不了的页签这轮算「未知」,不算恢复也不算失败;
 //   4. 页签健康:通过 = 有节点通过;失败 = 所有有效节点都明确失败;其余 = 未知(有节点没测到 /
@@ -30,6 +34,7 @@
 // jbox/failover-state,重启 / 重新部署后据此恢复关联,但健康一定重新检测过才动手。
 import { CLASH_API_BASE } from '../api/penetration.mjs'
 import { kernelTestUrl } from '../engine/test-url.mjs'
+import { createProbeCoordinator } from './probe-coordinator.mjs'
 import { configMetaPath } from './deploy.mjs'
 import { processUptime } from './service.mjs'
 
@@ -66,8 +71,12 @@ const sameOrder = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length ===
 
 export const createFailoverManager = ({
   store, ctx, paths, history = null, fetchImpl = globalThis.fetch, now = () => Date.now(),
-  tickMs = 5000, probeConcurrency = 4, log = () => {},
+  tickMs = 5000, probeConcurrency = 4, log = () => {}, coordinator = null,
 }) => {
+  // 自动优选与故障转移共用同一个探测协调器(system/probe-coordinator.mjs):按「节点 + 测速地址」
+  // 共享结果,同一个共享节点不会被两条链路在几秒内各测一遍。生产由 index.mjs 注入同一个实例;
+  // 没注入时(单元测试 / 单独使用)就地建一个,探测行为完全一致。
+  const probes = coordinator || createProbeCoordinator({ store, fetchImpl, now })
   const headers = () => {
     const secret = store.getClashSecret ? store.getClashSecret() : ''
     return secret ? { Authorization: `Bearer ${secret}` } : {}
@@ -188,30 +197,23 @@ export const createFailoverManager = ({
     if (!res || !res.ok) throw new Error(`proxy ${tag} HTTP ${res ? res.status : 'none'}`)
     return res.json()
   }
-  // 单个节点的端到端探测。内核用这个节点出站访问测速地址:200 = 通过;503 / 504 = 这个节点失败
-  // (超时 / 出错);别的情况(接口不可达、404、5xx)是探测基础设施的问题,记未知,不算节点失败。
-  // 随包内核的 Clash API 保留 HTTP / HTTPS 地址，与内部子组的定时探测使用同一配置。
-  const probeNode = async (tag, url, timeoutMs) => {
-    const at = now()
-    try {
-      const res = await withTimeout(fetchImpl, api(`/proxies/${encodeURIComponent(tag)}/delay?url=${encodeURIComponent(url)}&timeout=${timeoutMs}`), { headers: headers() }, timeoutMs + 5000)
-      if (!res) return { ok: null, at, reason: 'no-response' }
-      if (res.ok) {
-        let body = null
-        try { body = await res.json() } catch { /* 空体也算通过 */ }
-        const delay = body && Number.isFinite(Number(body.delay)) ? Number(body.delay) : 0
-        return delay > 0 ? { ok: true, delay, at } : { ok: false, delay: 0, at, reason: 'zero-delay' }
-      }
-      if (res.status === 503 || res.status === 504) return { ok: false, delay: 0, at, reason: res.status === 504 ? 'timeout' : 'failed' }
-      return { ok: null, at, reason: `http-${res.status}` }
-    } catch (err) {
-      return { ok: null, at, reason: err && err.name === 'AbortError' ? 'probe-timeout' : errText(err) }
-    }
+  // 单个节点的端到端探测:交给共享协调器(按「节点 + 测速地址」去重)。
+  // 超时会**立即复查一次**(item:故障转移遇到节点超时先复查):网络抖动不该让一个页签
+  // 直接判失败——复查通过就当这轮通过、继续当前策略;复查仍失败才把失败交给下面的转移判断。
+  // 定时探测用 force=false(内核 history 还新鲜就直接复用,见 urltest-force.patch),
+  // 复查用 force=true 强制真测。
+  const probeNode = async (tag, url, timeoutMs, intervalMs = 0) => {
+    const first = await probes.probe(tag, url, { intervalMs, timeoutMs, force: false })
+    if (first && first.ok === true) return first
+    const again = await probes.probe(tag, url, { intervalMs: 0, timeoutMs, force: true })
+    if (again && again.ok === true) return { ...again, retried: true }
+    return again || first
   }
-  // 让内核按最新结果给多节点页签重选(force=false:刚测过的成员它会跳过,所以这一步很便宜)
+  // 让内核按最新结果给多节点页签重选(force=false:刚测过的成员它会跳过,所以这一步很便宜;
+  // 没打 force 补丁的内核会忽略参数,退回"整组重测")
   const retestSub = async (subTag, url, timeoutMs, memberCount) => {
     try {
-      const res = await withTimeout(fetchImpl, api(`/group/${encodeURIComponent(subTag)}/delay?url=${encodeURIComponent(url)}&timeout=${timeoutMs}`), { headers: headers() }, Math.ceil(memberCount / 10) * timeoutMs + 5000)
+      const res = await withTimeout(fetchImpl, api(`/group/${encodeURIComponent(subTag)}/delay?url=${encodeURIComponent(url)}&timeout=${timeoutMs}&force=false`), { headers: headers() }, Math.ceil(memberCount / 10) * timeoutMs + 5000)
       return Boolean(res && res.ok)
     } catch { return false }
   }
@@ -241,6 +243,8 @@ export const createFailoverManager = ({
     const s = state.settings || {}
     const url = kernelTestUrl(s.testUrl || '')
     const timeoutMs = Number(s.timeoutMs) || 5000
+    // 与自动组共用协调器时的复用窗口:这个组自己的检测间隔(和 nextRoundAt 用的是同一个值)
+    const intervalMs = Math.max(5000, Number(s.intervalMs) || 300_000)
     const threshold = Math.max(1, Number(s.failureThreshold) || 1)
     const restorePrimary = s.restorePrimary !== false
     const holdMs = Math.max(0, Number(s.recoveryHoldMs) || 0)
@@ -256,7 +260,7 @@ export const createFailoverManager = ({
     const tags = [...new Set(state.lanes.flatMap((l) => l.valid))]
     const results = new Map()
     if (url && tags.length) {
-      const list = await mapLimit(tags, probeConcurrency, (tag) => probeNode(tag, url, timeoutMs))
+      const list = await mapLimit(tags, probeConcurrency, (tag) => probeNode(tag, url, timeoutMs, intervalMs))
       list.forEach((r, i) => results.set(tags[i], r))
     }
     const stale = () => stopped || version !== roundVersion || states.get(state.id) !== state
@@ -521,7 +525,9 @@ export const createFailoverManager = ({
         id: l.id, name: l.name, index: l.index, role: laneRole(l.index), mode: l.mode, ref: l.ref, subTag: l.subTag,
         members: l.members, valid: l.valid, health: l.health, failStreak: l.failStreak, upSince: l.upSince,
         kernelNow: l.kernelNow, confirmed: l.confirmed,
-        nodes: Object.fromEntries(l.valid.map((t) => [t, g.nodes[t] ? { ok: g.nodes[t].ok, delay: g.nodes[t].delay ?? null, at: g.nodes[t].at, reason: g.nodes[t].reason || null } : null])),
+        // retried:这个结果来自"超时后的立即复查"(见 probeNode),界面上能看出节点是抖了一下
+        // 还是真的不通
+        nodes: Object.fromEntries(l.valid.map((t) => [t, g.nodes[t] ? { ok: g.nodes[t].ok, delay: g.nodes[t].delay ?? null, at: g.nodes[t].at, reason: g.nodes[t].reason || null, retried: g.nodes[t].retried === true } : null])),
       })),
     })),
   })

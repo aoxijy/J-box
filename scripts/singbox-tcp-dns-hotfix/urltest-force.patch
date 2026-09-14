@@ -1,0 +1,106 @@
+diff -ruN force-a/adapter/experimental.go force-b/adapter/experimental.go
+--- a/adapter/experimental.go	2026-09-14 00:33:33.000000000 +0800
++++ b/adapter/experimental.go	2026-09-14 18:35:57.864006904 +0800
+@@ -166,5 +166,9 @@
+ type URLTestGroup interface {
+ 	OutboundGroup
+ 	URLTest(ctx context.Context) (map[string]uint16, error)
++	// URLTestForce 是 J-Box 加的:定时探测用 force=false,内核按检测间隔跳过刚测过的成员
++	// (不重测);手动测速仍然 force=true。见 experimental/clashapi/api_meta_group.go 与
++	// scripts/singbox-tcp-dns-hotfix/urltest-force.patch。
++	URLTestForce(ctx context.Context, force bool) (map[string]uint16, error)
+ 	PerformUpdateCheck()
+ }
+diff -ruN force-a/experimental/clashapi/api_meta_group.go force-b/experimental/clashapi/api_meta_group.go
+--- a/experimental/clashapi/api_meta_group.go	2026-09-14 00:33:33.000000000 +0800
++++ b/experimental/clashapi/api_meta_group.go	2026-09-14 18:35:57.863933852 +0800
+@@ -71,18 +71,25 @@
+ 			return
+ 		}
+ 
++		// J-Box:定时探测可以带 force=false,让内核按检测间隔跳过刚测过的成员;不带参数
++		// 就是 force(手动测速 / 面板手动触发的组测速,和以前一样)。
++		force := true
++		if v := query.Get("force"); v != "" {
++			force = v != "0" && v != "false"
++		}
++
+ 		ctx, cancel := context.WithTimeout(r.Context(), time.Millisecond*time.Duration(timeout))
+ 		defer cancel()
+ 
+ 		var result map[string]uint16
+ 		if urlTestGroup, isURLTestGroup := outboundGroup.(adapter.URLTestGroup); isURLTestGroup {
+-			result, err = urlTestGroup.URLTest(ctx)
++			result, err = urlTestGroup.URLTestForce(ctx, force)
+ 		} else {
+ 			outbounds := common.FilterNotNil(common.Map(outboundGroup.All(), func(it string) adapter.Outbound {
+ 				itOutbound, _ := server.outbound.Outbound(it)
+ 				return itOutbound
+ 			}))
+-			result = group.URLTestOutbounds(ctx, server.outbound, server.urlTestHistory, server.logger, outbounds, url, 0, true)
++			result = group.URLTestOutbounds(ctx, server.outbound, server.urlTestHistory, server.logger, outbounds, url, 0, force)
+ 		}
+ 
+ 		if err != nil {
+diff -ruN force-a/experimental/clashapi/proxies.go force-b/experimental/clashapi/proxies.go
+--- a/experimental/clashapi/proxies.go	2026-09-14 00:33:33.000000000 +0800
++++ b/experimental/clashapi/proxies.go	2026-09-14 18:35:57.863731568 +0800
+@@ -218,13 +218,29 @@
+ 			return
+ 		}
+ 
++		// J-Box:定时探测可以显式带 force=false + interval(毫秒)。history 还新鲜时直接把
++		// 已有结果还回去:既不重新测,也不触发下面的 PerformUpdateCheck——否则每探一次节点,
++		// 内核就会把包含它的每个 URLTest 组都重选一遍,用户设的检测间隔完全不起作用。
++		// 手动测速(面板「测速」按钮)不带这两个参数,行为与之前一致(force=true)。
++		force := true
++		if v := query.Get("force"); v != "" {
++			force = v != "0" && v != "false"
++		}
++		interval, _ := strconv.ParseInt(query.Get("interval"), 10, 64)
++
+ 		proxy := r.Context().Value(CtxKeyProxy).(adapter.Outbound)
++		realTag := group.RealTag(server.outbound, proxy)
++		if !force && interval > 0 {
++			if history := server.urlTestHistory.LoadURLTestHistory(realTag); history != nil && time.Since(history.Time) < time.Duration(interval)*time.Millisecond {
++				render.JSON(w, r, render.M{"delay": history.Delay})
++				return
++			}
++		}
+ 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
+ 		defer cancel()
+ 
+ 		delay, err := urltest.URLTest(ctx, url, proxy)
+ 		defer func() {
+-			realTag := group.RealTag(server.outbound, proxy)
+ 			if err != nil {
+ 				server.urlTestHistory.DeleteURLTestHistory(realTag)
+ 			} else {
+diff -ruN force-a/protocol/group/urltest.go force-b/protocol/group/urltest.go
+--- a/protocol/group/urltest.go	2026-09-14 00:33:33.000000000 +0800
++++ b/protocol/group/urltest.go	2026-09-14 18:35:57.864277737 +0800
+@@ -115,6 +115,12 @@
+ 	return s.group.URLTest(ctx)
+ }
+ 
++// URLTestForce:J-Box 的定时探测入口。force=false 表示"没到检测间隔的成员直接复用历史",
++// 供 Clash API 的定时探测使用;手动测速走 URLTest()(force=true)。
++func (s *URLTest) URLTestForce(ctx context.Context, force bool) (map[string]uint16, error) {
++	return s.group.URLTestForce(ctx, force)
++}
++
+ func (s *URLTest) CheckOutbounds() {
+ 	s.group.CheckOutbounds(s.ctx, true)
+ }
+@@ -370,6 +376,11 @@
+ 	return g.urlTest(ctx, true)
+ }
+ 
++// URLTestForce:force=false 时只测到点的成员,并保持原来的重选语义。
++func (g *URLTestGroup) URLTestForce(ctx context.Context, force bool) (map[string]uint16, error) {
++	return g.urlTest(ctx, force)
++}
++
+ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint16, error) {
+ 	if g.checking.Swap(true) {
+ 		return make(map[string]uint16), nil

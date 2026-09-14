@@ -56,6 +56,27 @@ TCP DNS 补丁最初版本为 `1.14.0-jbox-tcp1`。回归覆盖空闲连接无�
 - 内置预设地址（gstatic / Cloudflare / YouTube 的 `generate_204`、Microsoft `connecttest`、GitHub `robots.txt`）都不会返回 403，行为不变。
 - 回归：`TestJBoxHTTPRejectedStatusIsFailure`（403 必须失败）、`TestJBoxHTTPAuthChallengeIsReachable`（401 仍算可达），随 `http_latency_test.go` 一起在构建时运行。
 
+## Clash API 定时探测（tcp4）
+
+`1.14.0-jbox-tcp4` 在 tcp3 之上追加 `urltest-force.patch`：
+
+- 问题:内核的 `/proxies/:name/delay` 每被调用一次,就会对**所有包含该节点的 URLTest 组**
+  重跑一次择优(`PerformUpdateCheck`)。面板按检测间隔定时探测时,一个被多个组共享的节点
+  几秒内会被反复探测,顺带把每个组都重选一遍——用户设的 300 秒间隔完全不起作用,重选还
+  常常跳到 history 里延迟低、其实已经不通的节点上。
+- 补丁给两个 Clash API 端点都加了 `force`(默认 `true`,与上游一致)与 `interval`(毫秒,
+  仅 `/proxies/:name/delay` 用):
+  - `force=false` + `interval` 且该节点 history 还新鲜 → **直接把已有延迟返回**,既不重测
+    也不触发 `PerformUpdateCheck`;
+  - `force=false` 的组测速走新的 `URLTestGroup.URLTestForce(ctx, force)`,没到间隔的成员
+    由内核自己跳过(上游 `URLTestOutbounds` 原有逻辑);
+  - **不带这两个参数 = 手动测速,仍然是强制真测**(面板「测速」按钮、订阅页一键测速走的
+    就是这条)。
+- 面板侧对应实现见 `panel/server/system/probe-coordinator.mjs`(按「节点 + 测速地址」共享
+  结果、并发合并、按各组最短 interval 复用)。
+- 旧版内核会忽略这两个参数,行为退回"每次都真测";面板侧的复用依然生效,所以面板与内核
+  可以分开升级。
+
 ## 交付边界
 
 `build.sh` 只生成完整静态内核，不会部署、替换正式路由器或发布 GitHub Release。构建后通过 `dt-needed.py --assert-static` 检查没有动态链接器和动态库依赖。
