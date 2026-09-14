@@ -58,7 +58,7 @@ const en = {
   testUrlDescription: 'Used by url-test groups and the Proxies page latency test; each url-test group can override it.',
   customTestUrl: 'Custom test URL',
   customTestUrlHint:
-    'For groups that need their own probe, e.g. set https://api.openai.com/v1/models for the AI group. Empty falls back to the global URL above.',
+    'For groups that need their own probe, e.g. set https://api.openai.com/v1/models for the AI group. Empty falls back to the global URL above. The kernel treats 403/451/511 (denied / region-blocked) as unreachable, so OpenAI picks nodes by 401 = reachable, 403 = blocked.',
   testUrlModeGlobal: 'Use global test URL',
   testUrlModeCustom: 'Custom URL (Backend settings)',
   testUrlModeManual: 'Enter manually…',

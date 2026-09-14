@@ -60,7 +60,7 @@ const zh: LANG_MESSAGE = {
   testUrlDescription: '自动择优组和代理页的延迟测试用这两个地址;每个自动择优组也可以单独指定。',
   customTestUrl: '自定义测速地址',
   customTestUrlHint:
-    '给需要专用检测地址的分组用,例如 AI 分组填 https://api.openai.com/v1/models;留空则引用它的分组回落上面的全局地址。',
+    '给需要专用检测地址的分组用,例如 AI 分组填 https://api.openai.com/v1/models;留空则引用它的分组回落上面的全局地址。内核把 403/451/511(被拒绝/地区封锁)判为不可用,所以 OpenAI 会按 401=能连、403=被封锁来选节点。',
   testUrlModeGlobal: '跟随全局测速地址',
   testUrlModeCustom: '自定义地址（后端设置）',
   testUrlModeManual: '手动输入…',

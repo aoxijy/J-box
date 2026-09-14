@@ -46,6 +46,16 @@ TCP DNS 补丁最初版本为 `1.14.0-jbox-tcp1`。回归覆盖空闲连接无�
 
 本机可以设置 `JBOX_TEST_SINGBOX=/path/to/new/sing-box` 运行集成测试；发布 CI 使用本次从源码构建的完整内核。内核和面板必须一起更新，旧版内核仍会丢弃 HTTP 测速地址。
 
+## 探测状态码（tcp3）
+
+`1.14.0-jbox-tcp3` 在 tcp2 之上追加 `urltest-status.patch`：
+
+- 原生 URLTest 只看 HTTP 往返成功与否、不读状态码。于是按地区封锁的站点（例如 OpenAI 对不支持地区返回 `403 unsupported_country_region_territory`）也会被判成「可用」，AI 分组可能选中实际打不开 OpenAI 的节点。
+- 补丁把 `403 / 451 / 511`（被拒绝 / 法律屏蔽 / 门户认证）判为探测失败；其余状态（`204/200/401/404/429…`）保持原样，一律算可达。
+- 因此 `https://api.openai.com/v1/models` 成为一个有判别力的地址：健康节点回 `401`（缺 API key）算通，被封锁/被拒回 `403` 算不通。实测 HEAD/GET 均为 401。
+- 内置预设地址（gstatic / Cloudflare / YouTube 的 `generate_204`、Microsoft `connecttest`、GitHub `robots.txt`）都不会返回 403，行为不变。
+- 回归：`TestJBoxHTTPRejectedStatusIsFailure`（403 必须失败）、`TestJBoxHTTPAuthChallengeIsReachable`（401 仍算可达），随 `http_latency_test.go` 一起在构建时运行。
+
 ## 交付边界
 
 `build.sh` 只生成完整静态内核，不会部署、替换正式路由器或发布 GitHub Release。构建后通过 `dt-needed.py --assert-static` 检查没有动态链接器和动态库依赖。

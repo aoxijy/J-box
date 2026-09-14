@@ -60,7 +60,7 @@ const zhTW: LANG_MESSAGE = {
   testUrlDescription: '自動擇優群組和代理頁的延遲測試用這兩個位址;每個自動擇優群組也可以單獨指定。',
   customTestUrl: '自訂測速位址',
   customTestUrlHint:
-    '給需要專用檢測位址的群組用,例如 AI 群組填 https://api.openai.com/v1/models;留空則引用它的群組回落上面的全域位址。',
+    '給需要專用檢測位址的群組用,例如 AI 群組填 https://api.openai.com/v1/models;留空則引用它的群組回落上面的全域位址。核心把 403/451/511(被拒絕/地區封鎖)判為不可用,所以 OpenAI 會按 401=能連、403=被封鎖來選節點。',
   testUrlModeGlobal: '跟隨全域測速位址',
   testUrlModeCustom: '自訂位址（後端設定）',
   testUrlModeManual: '手動輸入…',

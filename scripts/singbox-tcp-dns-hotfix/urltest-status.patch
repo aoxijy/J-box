@@ -1,0 +1,26 @@
+--- a/common/urltest/urltest.go
++++ b/common/urltest/urltest.go
+@@ -3,6 +3,7 @@
+ import (
+ 	"context"
+ 	"crypto/tls"
++	"errors"
+ 	"net"
+ 	"net/http"
+ 	"net/url"
+@@ -142,6 +143,15 @@
+ 		return
+ 	}
+ 	resp.Body.Close()
++	// J-Box:403/451/511 是「被明确拒绝」——地区封锁、法律屏蔽、门户认证。urltest 原本
++	// 不看状态码,任何 HTTP 应答都算可用,于是按地区封锁的 OpenAI(403
++	// unsupported_country_region_territory)也会被判成可用。这里把它当失败,让
++	// https://api.openai.com/v1/models 这类地址有判别力:健康节点回 401(缺 key)算通,
++	// 被封锁/被拒回 403 算不通。204/200/401/404/429 等其余状态保持原样。
++	switch resp.StatusCode {
++	case http.StatusForbidden, http.StatusUnavailableForLegalReasons, http.StatusNetworkAuthenticationRequired:
++		return 0, errors.New("probe rejected: " + resp.Status)
++	}
+ 	// A successful sub-millisecond HTTP probe must not look unavailable to
+ 	// Clash API clients, which reserve zero for failed tests.
+ 	t = uint16(max(1, time.Since(start)/time.Millisecond))

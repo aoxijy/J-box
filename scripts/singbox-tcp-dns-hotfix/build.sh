@@ -39,6 +39,9 @@ tar -xzf "$hotfix_work/source.tar.gz" -C "$hotfix_work"
 cd "$hotfix_work/sing-box-$SINGBOX_UPSTREAM_VERSION"
 patch -p1 < "$hotfix_dir/tcp-dns-short-connections.patch"
 patch -p1 < "$hotfix_dir/http-latency.patch"
+# urltest 的探针原本不看状态码,任何 HTTP 应答都算可用;按地区封锁的站点(如 OpenAI)
+# 回 403 也会被判成「可用」。这个补丁把 403/451/511 当失败,见该补丁头部说明。
+patch -p1 < "$hotfix_dir/urltest-status.patch"
 cp "$hotfix_dir/tcp_short_connection_test.go" dns/transport/jbox_tcp_test.go
 cp "$hotfix_dir/http_latency_test.go" common/urltest/jbox_http_test.go
 

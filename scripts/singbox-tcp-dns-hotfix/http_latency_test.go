@@ -106,3 +106,28 @@ func TestJBoxHTTPTimeout(t *testing.T) {
 		t.Fatalf("timeout: delay=%d err=%v", delay, err)
 	}
 }
+
+// J-Box:403/451/511 是「被明确拒绝」(地区封锁 / 法律屏蔽 / 门户认证),必须判失败。
+// 否则按地区封锁的 OpenAI 回 403 也会被当成「可用」,AI 分组就会选中打不开 OpenAI 的节点。
+func TestJBoxHTTPRejectedStatusIsFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+	dialer := &jBoxHTTPDialer{address: server.Listener.Addr().String()}
+	if delay, err := URLTest(context.Background(), server.URL, dialer); err == nil || delay != 0 {
+		t.Fatalf("403 must be a failure: delay=%d err=%v", delay, err)
+	}
+}
+
+// 401(缺 API key)说明服务确实应答了,必须仍算可达——OpenAI 的健康节点回的就是 401。
+func TestJBoxHTTPAuthChallengeIsReachable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+	dialer := &jBoxHTTPDialer{address: server.Listener.Addr().String()}
+	if delay, err := URLTest(context.Background(), server.URL, dialer); err != nil || delay == 0 {
+		t.Fatalf("401 must stay reachable: delay=%d err=%v", delay, err)
+	}
+}

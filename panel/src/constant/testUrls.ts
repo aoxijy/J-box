@@ -2,9 +2,10 @@
 // 「自定义地址」不是预设:它写哨兵值 custom,由服务端解析成档案里的 customTestUrl
 // (见 server/engine/test-url.mjs),这样在「后端设置 → 测速地址」改一次,引用它的分组全部跟着变。
 //
-// 说明:内核 URLTest 只看 HTTP 往返是否成功、不校验状态码(实测 sing-box 1.14
-// common/urltest/urltest.go 不读 StatusCode),所以 api.openai.com 返回 401 也算"通"——
-// 它测的正是"这个节点能不能连上 OpenAI",而不是"有没有带 API key"。
+// 说明:随包内核打过 urltest-status.patch——403/451/511(被拒绝/地区封锁/门户认证)算探测
+// 失败,其余状态一律算可达。所以 api.openai.com/v1/models 是有判别力的:健康节点回 401
+// (缺 API key)算通,被 OpenAI 按地区封锁回 403 算不通。内核版本见
+// scripts/singbox-tcp-dns-hotfix/README.md 的「探测状态码(tcp3)」。
 export const CUSTOM_TEST_URL_TOKEN = 'custom'
 
 export interface TestUrlPreset {
