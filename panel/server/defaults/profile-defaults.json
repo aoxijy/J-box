@@ -13,6 +13,7 @@
     "mode": "dnsmasq",
     "direct": "223.5.5.5",
     "proxy": "1.1.1.1",
+    "fakeIpForProxy": true,
     "rewrite": {
       "initialized": 1,
       "rules": [
