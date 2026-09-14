@@ -827,7 +827,7 @@ const en = {
   routeDnsRewrite: 'DNS rewrite',
   routeDnsRewriteHit: 'Rewrite: {source} → {target}',
   dnsFakeIpTitle: 'Enable FakeIP (let the node resolve proxied domains)',
-  dnsFakeIpNote: 'Proxied domains are not resolved locally: the kernel answers with a placeholder (198.18.0.0/15) and hands the domain to the node, which resolves it there. Client DNS therefore no longer depends on the node being alive (without it, a slow or dead node makes DNS block for seconds and then fail for the whole LAN). Only outbounds that carry domains (SOCKS5 / vless / vmess / trojan / hysteria…) benefit; IP-based rules ahead of the proxied sets will not match these connections. Restart the kernel after switching. On by default.',
+  dnsFakeIpNote: 'Proxied domains are not resolved locally: the kernel answers with a placeholder (IPv4 198.18.0.0/15 / IPv6 2001:db8::/32) and hands the domain to the node, which resolves it there. Client DNS therefore no longer depends on the node being alive (without it, a slow or dead node makes DNS block for seconds and then fail for the whole LAN). Only outbounds that carry domains (SOCKS5 / vless / vmess / trojan / hysteria…) benefit; IP-based rules ahead of the proxied sets will not match these connections. Restart the kernel after switching. On by default.',
   nodeDirectTitle: 'Direct for subscription & node hosts',
   nodeDirectDescription: 'Subscription URLs and every node server address go direct, ahead of all site sets.',
   nodeDirectOnNote: 'On: these hosts go direct with local DNS. Takes effect after a kernel restart.',

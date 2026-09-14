@@ -40,9 +40,16 @@ const proxyServerFor = (server, tag, detour) => ({ type: 'tcp', tag, server, det
 // 直连集合,入口旁路就不会被"域名规则解析出来的 IP"误放行;(3) 客户端 DNS 不再依赖节点是否活着
 // ——不开 FakeIP 时走代理的域名要经节点问 1.1.1.1,节点慢/挂就是几秒等待后 SERVFAIL、整网
 // DNS_PROBE_FINISHED_NO_INTERNET(2026-09-14 现场实测 2.4–5.0s 且经常失败)。直连域名照旧真实解析。
-// 占位段用 sing-box 默认:198.18.0.0/15(RFC 2544 保留段,公网上不会有)、fc00::/18。
+// 占位段:v4 用 sing-box 默认的 198.18.0.0/15(RFC 2544 保留段,公网上不会有);
+// v6 **不能**用 sing-box 默认的 fc00::/18 —— 那是 ULA,现场(2026-09-14)踩了两个坑:
+//   1) 客户端给「ULA 目标」选源地址时会优先挑自己那条同类型的 ULA(很多设备上还留着旧主路由
+//      RA 下发的残留 ULA,比如 fd36:...),这个源不在内核的接管集合里 → 走代理域名的 v6 连接
+//      直接卡死(YouTube 主页能靠 v4 回退出来,封面 i.ytimg.com 和视频 googlevideo 全挂);
+//   2) ULA 属于"私网/本地"范围,内核自动接管那层会把 ULA 目标排除在外。
+// 换成全局单播里的文档保留段 2001:db8::/32(RFC 3849,公网永远不会路由到)后,客户端一律用
+// 自己的全局源地址、内核也照常接管 —— 实测同一个带残留 ULA 的客户端,换段后 v6 立刻通。
 export const FAKEIP_V4 = '198.18.0.0/15'
-export const FAKEIP_V6 = 'fc00::/18'
+export const FAKEIP_V6 = '2001:db8::/32'
 export const FAKEIP_TAG = 'dns-fakeip'
 export const dnsFakeIpEnabled = (profile) => Boolean(profile && profile.dns && profile.dns.split !== false && profile.dns.fakeIpForProxy === true)
 

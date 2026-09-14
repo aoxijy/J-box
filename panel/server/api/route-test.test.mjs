@@ -170,7 +170,7 @@ test('fake-ip:代理侧解析回 198.18.x.x 就标出是 detour 此刻落到的�
   assert.equal(isFakeIp('198.19.255.1'), true)
   assert.equal(isFakeIp('198.20.0.1'), false)
   assert.equal(isFakeIp('142.250.66.4'), false)
-  assert.equal(isFakeIp('fc00::1'), true)
+  assert.equal(isFakeIp('2001:db8::1'), true)
   assert.equal(isFakeIp('fd00::1'), false)
   const config = {
     dns: {

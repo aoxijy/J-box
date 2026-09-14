@@ -823,7 +823,7 @@ const zh: LANG_MESSAGE = {
   routeDnsRewrite: 'DNS 重写',
   routeDnsRewriteHit: '重写:{source} → {target}',
   dnsFakeIpTitle: '启用 FakeIP（走代理的域名交给节点解析）',
-  dnsFakeIpNote: '走代理的域名不在本地解析：内核先回占位地址(198.18.0.0/15)，连接时把域名交给节点在该侧解析。这样客户端 DNS 不再依赖节点是否活着(不开时节点慢/挂会让整网 DNS 等几秒后失败)；只对能携带域名的出站(SOCKS5 / vless / vmess / trojan / hysteria 等)生效，按目标 IP 判的前置规则对这些连接不会命中。切换后重启内核生效。设默认开启。',
+  dnsFakeIpNote: '走代理的域名不在本地解析：内核先回占位地址(IPv4 198.18.0.0/15 / IPv6 2001:db8::/32)，连接时把域名交给节点在该侧解析。这样客户端 DNS 不再依赖节点是否活着(不开时节点慢/挂会让整网 DNS 等几秒后失败)；只对能携带域名的出站(SOCKS5 / vless / vmess / trojan / hysteria 等)生效，按目标 IP 判的前置规则对这些连接不会命中。切换后重启内核生效。设默认开启。',
   nodeDirectTitle: '订阅和节点站点直连',
   nodeDirectDescription: '订阅地址和各节点的服务器地址一律直连,排在所有站点集之前。',
   nodeDirectOnNote: '开启中:这些地址走直连、用本地解析;重启内核后生效。',

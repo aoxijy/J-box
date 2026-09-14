@@ -185,7 +185,8 @@ export const buildConfig = ({ nodes, profile, userGroups, systemDns, localSubnet
   // 依据——挖掉之后路由器回给局域网的每个包都被路由进 tun 吞掉,LuCI / 面板 / DNS 全部失联,
   // 重启后内核自启立刻复现(v0.1.65–v0.1.70 的「禁用」模式,正式路由器和开发路由器都实测)。
   const holes = autoRedirect && dnsMode === 'hijack' ? [...localSubnets, TUN_V4_NET, TUN_V6_NET] : [TUN_V4_NET, TUN_V6_NET]
-  // FakeIP 的 v6 占位段 fc00::/18 落在排除表的 fc00::/7 里,不挖出来的话走代理域名的 v6 连接在入口就被
+  // FakeIP 的 v6 占位段(现在是 2001:db8::/32,全局段;若日后改回 ULA 如 fc00::/18 就会落在下面的
+  // fc00::/7 里)不挖出来的话,走代理域名的 v6 连接在入口就被
   // 放走了(v4 的 198.18.0.0/15 不在排除表里,不用挖)
   const fakeIp = dnsFakeIpEnabled(profile)
   if (fakeIp && ipv6ProxyMode(profile) === 'node') holes.push(FAKEIP_V6)

@@ -823,7 +823,7 @@ const zhTW: LANG_MESSAGE = {
   routeDnsRewrite: 'DNS 重寫',
   routeDnsRewriteHit: '重寫:{source} → {target}',
   dnsFakeIpTitle: '啟用 FakeIP（走代理的網域交給節點解析）',
-  dnsFakeIpNote: '走代理的網域不在本機解析：核心先回佔位位址(198.18.0.0/15)，連線時把網域交給節點在那一側解析。這樣客戶端 DNS 不再依賴節點是否活著(不開時節點慢/掛會讓整網 DNS 等幾秒後失敗)；只對能攜帶網域的出站(SOCKS5 / vless / vmess / trojan / hysteria 等)生效，按目標 IP 判的前置規則對這些連線不會命中。切換後重啟核心生效。預設開啟。',
+  dnsFakeIpNote: '走代理的網域不在本機解析：核心先回佔位位址(IPv4 198.18.0.0/15 / IPv6 2001:db8::/32)，連線時把網域交給節點在那一側解析。這樣客戶端 DNS 不再依賴節點是否活著(不開時節點慢/掛會讓整網 DNS 等幾秒後失敗)；只對能攜帶網域的出站(SOCKS5 / vless / vmess / trojan / hysteria 等)生效，按目標 IP 判的前置規則對這些連線不會命中。切換後重啟核心生效。預設開啟。',
   nodeDirectTitle: '訂閱和節點站點直連',
   nodeDirectDescription: '訂閱位址和各節點的伺服器位址一律直連,排在所有站點集之前。',
   nodeDirectOnNote: '開啟中:這些位址走直連、用本地解析;重啟核心後生效。',

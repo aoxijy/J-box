@@ -385,13 +385,15 @@ test('例外规则比排除段还大(10.0.0.0/7 盖住 10/8)也要挖:看的是�
   assert.ok(ex.some((x) => cidrContains(x, '172.20.0.1')), '别的私网段照旧排除')
 })
 
-test('FakeIP 原型:cache_file 存占位映射;开了 IPv6 时把 fc00::/18 从 tun 排除表挖出来;部署给的旁路结论优先于纯函数(第三轮 阶段 3)', () => {
+test('FakeIP:cache_file 存占位映射;假 v6 段不能落在 tun 排除表里(ULA 会);部署给的旁路结论优先于纯函数(第三轮 阶段 3)', () => {
   const on = buildConfig({ nodes, regionGroups, userGroups: firstLayerGroups, localSubnets: subnets, profile: firstLayerProfile({ dns: { split: true, mode: 'dnsmasq', direct: '223.5.5.5', proxy: '1.1.1.1', fakeIpForProxy: true } }) })
   assert.equal(on.experimental.cache_file.store_fakeip, true)
   assert.ok(on.dns.servers.some((s) => s.type === 'fakeip'))
   const ex6 = on.inbounds[0].route_exclude_address
-  assert.ok(!ex6.some((x) => cidrContains(x, 'fc00::1')), 'v6 占位段要挖出来,不然走代理域名的 v6 连接在入口就被放走')
-  assert.ok(ex6.some((x) => cidrContains(x, 'fd00::1')), 'fc00::/7 剩下的部分还在排除表里')
+  // 假 v6 段(2001:db8::/32)本来就不在排除表里;若哪天改回 ULA(fc00::/18),holes 逻辑必须把它挖出来,
+  // 否则走代理域名的 v6 连接在入口就被放走(2026-09-14 现场:ULA 假段 + 客户端残留 ULA 导致视频全挂)
+  assert.ok(!ex6.some((x) => cidrContains(x, '2001:db8::1')), '假 v6 段不能出现在 tun 排除表里')
+  assert.ok(ex6.some((x) => cidrContains(x, 'fd00::1')), 'fc00::/7(ULA)剩下的部分还在排除表里')
   const off = buildConfig({ nodes, regionGroups, userGroups: firstLayerGroups, localSubnets: subnets, profile: firstLayerProfile() })
   assert.equal(off.experimental.cache_file.store_fakeip, false)
   assert.ok(off.inbounds[0].route_exclude_address.some((x) => cidrContains(x, 'fc00::1')))
