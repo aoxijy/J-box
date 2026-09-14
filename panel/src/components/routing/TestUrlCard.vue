@@ -31,6 +31,20 @@
         </div>
       </div>
 
+      <!-- 分组可选的「自定义地址」:分组测速地址选「自定义地址」时引用这一条。
+           典型用法:AI 分组用 https://api.openai.com/v1/models 测,才能反映该节点能不能访问 OpenAI。 -->
+      <div class="flex min-w-0 flex-col gap-1">
+        <label class="text-xs font-medium">{{ $t('customTestUrl') }}</label>
+        <input
+          v-model="customUrl"
+          type="url"
+          class="input input-sm w-full font-mono text-xs"
+          placeholder="https://api.openai.com/v1/models"
+          @change="save('customTestUrl', customUrl)"
+        />
+        <p class="text-base-content/50 text-xs">{{ $t('customTestUrlHint') }}</p>
+      </div>
+
     </div>
   </div>
 </template>
@@ -50,22 +64,29 @@ const props = defineProps<{
 
 const testUrl = ref(props.profile.testUrl || '')
 const directUrl = ref(props.profile.directTestUrl || '')
+const customUrl = ref(props.profile.customTestUrl || '')
 watch(
   () => props.profile,
   (p) => {
     testUrl.value = p.testUrl || ''
     directUrl.value = p.directTestUrl || ''
+    customUrl.value = p.customTestUrl || ''
   },
 )
 
 // 空就回落到 HTTP 默认值；自定义地址保留原协议；存进档案的同时
-// 更新面板那份,延迟测试立刻按新地址走,不用刷新
-const save = async (key: 'testUrl' | 'directTestUrl', raw: string) => {
-  const value = kernelTestUrl(raw) || (key === 'testUrl' ? TEST_URL : DIRECT_TEST_URL)
+// 更新面板那份,延迟测试立刻按新地址走,不用刷新。
+// 分组用的自定义地址允许留空(留空 = 引用它的分组回落全局地址),不套默认值。
+const save = async (key: 'testUrl' | 'directTestUrl' | 'customTestUrl', raw: string) => {
+  const value =
+    key === 'customTestUrl'
+      ? kernelTestUrl(raw)
+      : kernelTestUrl(raw) || (key === 'testUrl' ? TEST_URL : DIRECT_TEST_URL)
   try {
     await props.patchProfile({ [key]: value })
     if (key === 'testUrl') { speedtestUrl.value = value; testUrl.value = value }
-    else { directTestUrl.value = value; directUrl.value = value }
+    else if (key === 'directTestUrl') { directTestUrl.value = value; directUrl.value = value }
+    else { customUrl.value = value }
   } catch (err) {
     showNotification({ content: 'routingSaveFailed', params: { message: err instanceof Error ? err.message : String(err) }, type: 'alert-error' })
   }

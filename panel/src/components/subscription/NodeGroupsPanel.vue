@@ -249,15 +249,7 @@
                 <span class="text-base-content/60 text-xs">{{ $t('groupUnitMs') }}</span>
               </div>
             </div>
-            <div class="flex min-w-0 flex-1 flex-col gap-1">
-              <label class="text-xs font-medium">{{ $t('groupTestUrl') }}</label>
-              <input
-                v-model="draft.testUrl"
-                type="url"
-                class="input input-sm w-full font-mono text-xs"
-                :placeholder="$t('groupTestUrlPlaceholder')"
-              />
-            </div>
+            <GroupTestUrlField v-model="draft.testUrl" />
             <button
               type="button"
               class="btn btn-ghost btn-sm"
@@ -295,15 +287,7 @@
                 <span class="text-base-content/60 text-xs">{{ $t('groupUnitMs') }}</span>
               </div>
             </div>
-            <div class="flex min-w-0 flex-1 flex-col gap-1">
-              <label class="text-xs font-medium">{{ $t('groupTestUrl') }}</label>
-              <input
-                v-model="draft.testUrl"
-                type="url"
-                class="input input-sm w-full font-mono text-xs"
-                :placeholder="$t('groupTestUrlPlaceholder')"
-              />
-            </div>
+            <GroupTestUrlField v-model="draft.testUrl" />
           </template>
         </div>
         <div
@@ -910,6 +894,7 @@ import { fetchNodeGroups, saveNodeGroups } from '@/api/jbox'
 import BulkPick from '@/components/subscription/BulkPick.vue'
 import CountryFlag from '@/components/common/CountryFlag.vue'
 import CountrySelect from '@/components/common/CountrySelect.vue'
+import GroupTestUrlField from '@/components/subscription/GroupTestUrlField.vue'
 import { kernelTestUrl } from '@/helper/testUrl'
 import IconScaleInput from '@/components/common/IconScaleInput.vue'
 import { AUTO_GROUP_DEFAULT_COUNTRIES, COUNTRIES, countryName, findCountry } from '@/constant/countries'

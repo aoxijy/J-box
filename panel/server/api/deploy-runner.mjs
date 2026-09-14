@@ -250,7 +250,7 @@ export const buildCurrentConfig = (store, systemDns, { geoDir = createPaths(proc
   }
   // 故障转移的运行映射(父组 / 页签 / 有效节点 / 子组 tag / 检测参数):和配置同一次生成,写进 config.meta.json
   // 给后台管理器和界面用
-  const { failover } = emitUserGroups(store.getGroups(), nodes, { testUrl: profile.testUrl })
+  const { failover } = emitUserGroups(store.getGroups(), nodes, { testUrl: profile.testUrl, customTestUrl: profile.customTestUrl })
   return { config, profile, failover }
 }
 

@@ -358,6 +358,20 @@ test('url-test 组的测速地址:组里填了用组的,没填用档案里的全
   assert.equal(noGlobal[1].url, 'http://www.gstatic.com/generate_204')
 })
 
+test('分组测速地址选「自定义地址」时引用档案里的 customTestUrl(AI 分组测 OpenAI 走这条)', () => {
+  const groups = [
+    { id: 'ai', name: 'AI', type: 'urltest', mode: 'dynamic', keywords: [], testUrl: 'custom' },
+    { id: 'b', name: 'B', type: 'urltest', mode: 'dynamic', keywords: [] },
+  ]
+  const out = userOnly(
+    emitUserGroups(groups, nodes, { testUrl: 'http://global.test/204', customTestUrl: 'https://api.openai.com/v1/models' }).outbounds,
+  )
+  assert.deepEqual(out.map((o) => o.url), ['https://api.openai.com/v1/models', 'http://global.test/204'])
+  // 后端设置里没填自定义地址 → 引用它的分组回落全局,不会产生空 url
+  const fallback = userOnly(emitUserGroups(groups, nodes, { testUrl: 'http://global.test/204' }).outbounds)
+  assert.deepEqual(fallback.map((o) => o.url), ['http://global.test/204', 'http://global.test/204'])
+})
+
 test('自动择优组带 idle_timeout:内核默认 30 分钟不用就停止健康检查,停了就一直挂在失效的线路上', () => {
   const { outbounds } = emitUserGroups(
     [{ id: 'g', name: '自动', type: 'urltest', mode: 'static', members: ['A', 'B'] }],

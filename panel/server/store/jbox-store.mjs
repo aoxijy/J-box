@@ -47,6 +47,11 @@ export const DEFAULT_PROFILE = {
   // 默认 HTTP，用户可自定义 HTTP / HTTPS 地址(见 engine/test-url.mjs)
   testUrl: DEFAULT_TEST_URL,
   directTestUrl: DEFAULT_DIRECT_TEST_URL,
+  // 分组可选的「自定义测速地址」:某类分组(典型是 AI 分组)需要一个更贴合的检测地址
+  // (如 https://api.openai.com/v1/models,测的是"这个节点到底能不能访问 OpenAI");
+  // 分组把测速地址设成哨兵值 custom 时解析到这里(见 engine/test-url.mjs)。
+  // 留空 = 引用它的分组回落全局 testUrl。
+  customTestUrl: '',
   // 自动更新计划(面板进程内的定时器,见 system/scheduler.mjs):默认都关
   // channel 是自动更新走的通道;checkChannel 是卡片上手动「检查更新 / 立即更新」那个下拉框
   // 上次选的通道,记下来免得每次进页面都要重选

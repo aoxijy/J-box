@@ -205,6 +205,8 @@ export interface JBoxProfile {
   // 测速地址:testUrl 给自动择优组和面板延迟测试用;directTestUrl 只给内置直连用
   testUrl?: string
   directTestUrl?: string
+  // 分组可选的「自定义测速地址」(分组测速地址 = custom 时引用它;留空回落 testUrl)
+  customTestUrl?: string
   // 每日流量这些分析数据留多久(月,1~36)
   traffic?: { keepMonths?: number }
   rulesetDir?: string

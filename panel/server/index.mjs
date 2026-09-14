@@ -765,7 +765,10 @@ const relayControllerWebSocket = (clientSocket, request) => {
 }
 
 const app = express()
-const server = http.createServer(app)
+// Node 的 HTTP 解析器默认只收 16KB 请求头(HPE_HEADER_OVERFLOW);面板挂在路由器上,
+// 又常被浏览器带着一大堆 Cookie / 代理请求头访问,放宽到 64KB。
+// 订阅那边的响应头限制见 system/insecure-fetch.mjs(同样是 64KB)。
+const server = http.createServer({ maxHeaderSize: 64 * 1024 }, app)
 const websocketServer = new WebSocketServer({ noServer: true })
 
 // 分享订阅是 capability URL：拿到随机 token 的设备可直接读取订阅内容，不需要面板登录。

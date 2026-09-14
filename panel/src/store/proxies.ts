@@ -38,6 +38,7 @@ import { computed, ref } from 'vue'
 import { activeConnections } from './connections'
 import {
   automaticDisconnection,
+  customTestUrl,
   groupTestUrls,
   iconReflectList,
   independentLatencyTest,
@@ -48,6 +49,7 @@ import {
 } from './settings'
 import { initSmartWeights } from './smart'
 import { loadLatencyHistory, reportLatencyTimeouts, syncLatencyHistory } from '@/store/latencyHistory'
+import { CUSTOM_TEST_URL_TOKEN } from '@/constant/testUrls'
 
 export const proxiesFilter = ref('')
 export const proxiesTabShow = useStorage<PROXY_TAB_TYPE>(
@@ -164,15 +166,28 @@ const speedtestUrlWithDefault = computed(() => {
   return speedtestUrl.value || TEST_URL
 })
 
+// 分组在「节点管理」里填了测速地址就以它为准(和内核里 url-test 用的那条一致);
+// 'custom' 是哨兵值,指「后端设置 → 测速地址」里的自定义地址(见 constant/testUrls.ts,
+// 服务端 engine/test-url.mjs 用同一套解析)。都没填才回落全局地址。
 export const getTestUrl = (groupName?: string) => {
-  if (!groupName || !independentLatencyTest.value) {
-    return speedtestUrlWithDefault.value
+  if (groupName) {
+    const groupTestUrl = groupTestUrls.value.find((item) => item.name === groupName)
+    if (groupTestUrl?.url) {
+      return groupTestUrl.url
+    }
+
+    const group = managedOutbounds.value.find((item) => item.name === groupName)
+    const raw = (group?.testUrl || '').trim()
+    if (raw === CUSTOM_TEST_URL_TOKEN) {
+      return customTestUrl.value || speedtestUrlWithDefault.value
+    }
+    if (raw) {
+      return raw
+    }
   }
 
-  const groupTestUrl = groupTestUrls.value.find((item) => item.name === groupName)
-
-  if (groupTestUrl) {
-    return groupTestUrl.url
+  if (!groupName || !independentLatencyTest.value) {
+    return speedtestUrlWithDefault.value
   }
 
   const proxyNode =

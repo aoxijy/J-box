@@ -147,6 +147,8 @@ export const proxyGroupColumns = useStorage<number>(
 export const speedtestUrl = useStorage<string>('config/speedtest-url', TEST_URL)
 // 内置直连出站用的测速地址(见 constant/index.ts 的说明)
 export const directTestUrl = useStorage<string>('config/direct-test-url', DIRECT_TEST_URL)
+// 分组可选的「自定义测速地址」(后端设置里填,跟着档案走;分组测速地址选「自定义地址」时用它)
+export const customTestUrl = useStorage<string>('config/custom-test-url', '')
 export const independentLatencyTest = useStorage('config/independent-latency-test', false)
 export const speedtestTimeout = useStorage<number>('config/speedtest-timeout', 5000)
 export const proxySortType = useStorage<PROXY_SORT_TYPE>(

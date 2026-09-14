@@ -71,7 +71,7 @@ export const builtinDefaults = () => ([
 
 // 默认测速地址在 engine/test-url.mjs(HTTP;Clash API 与内核自动探测共用),这里转出去给老的引用方
 export { DEFAULT_TEST_URL } from './test-url.mjs'
-import { DEFAULT_TEST_URL } from './test-url.mjs'
+import { DEFAULT_TEST_URL, resolveGroupTestUrl } from './test-url.mjs'
 // 新建自动择优组的默认:300 秒测一次(面板服务端按这个间隔硬性定时测,见 system/latency-scheduler.mjs)、
 // 容差 100ms(差不到 100ms 不换节点,免得几十毫秒的抖动让选中的节点跳来跳去)
 export const DEFAULT_INTERVAL = '300s'
@@ -323,6 +323,8 @@ const dropCycles = (groups) => {
 // 而一个空组对用户也没有任何意义。返回同时给出被丢弃的组,供调用方如实告知。
 export const emitUserGroups = (groups, nodes, options = {}) => {
   const testUrl = options.testUrl || DEFAULT_TEST_URL
+  // 分组测速地址支持 'custom' 哨兵(见 engine/test-url.mjs):解析成档案里的自定义地址
+  const groupTestUrl = (group) => resolveGroupTestUrl(group.testUrl, { testUrl, customTestUrl: options.customTestUrl })
   const normalized = normalizeGroups(groups)
   // 保持节点原有顺序:节点已经按地区词典排过序了(见 rename.mjs),组里的成员顺序
   // 跟着它走,策略组列表看起来才和节点列表一致。
@@ -373,7 +375,7 @@ export const emitUserGroups = (groups, nodes, options = {}) => {
       // 内部子组共用父组的检测参数;idle_timeout 抬到不低于 interval(内核硬性要求)
       outbounds.push({
         type: 'urltest', tag: subTag, outbounds: valid,
-        url: g.testUrl || testUrl, interval: g.interval || FAILOVER_DEFAULTS.interval, tolerance: g.tolerance ?? FAILOVER_DEFAULTS.tolerance,
+        url: groupTestUrl(g), interval: g.interval || FAILOVER_DEFAULTS.interval, tolerance: g.tolerance ?? FAILOVER_DEFAULTS.tolerance,
         idle_timeout: idleTimeoutFor(DEFAULT_IDLE_TIMEOUT, g.interval || FAILOVER_DEFAULTS.interval),
       })
       lanes.push({ id: lane.id, name: lane.name, icon: lane.icon || '', index, members: lane.members, valid, mode: 'urltest', ref: subTag, subTag })
@@ -398,7 +400,7 @@ export const emitUserGroups = (groups, nodes, options = {}) => {
       id: g.id, tag: g.name, lanes, rejectTag,
       settings: {
         interval: g.interval || FAILOVER_DEFAULTS.interval, intervalMs, tolerance: g.tolerance ?? FAILOVER_DEFAULTS.tolerance,
-        testUrl: g.testUrl || testUrl, ...(g.failover || FAILOVER_DEFAULTS),
+        testUrl: groupTestUrl(g), ...(g.failover || FAILOVER_DEFAULTS),
       },
     })
   }
@@ -425,7 +427,7 @@ export const emitUserGroups = (groups, nodes, options = {}) => {
         type: 'urltest',
         tag: g.name,
         outbounds: members,
-        url: g.testUrl || testUrl,
+        url: groupTestUrl(g),
         interval: g.interval || DEFAULT_INTERVAL,
         tolerance: g.tolerance ?? DEFAULT_TOLERANCE,
         idle_timeout: idleTimeoutFor(g.idleTimeout, g.interval || DEFAULT_INTERVAL),

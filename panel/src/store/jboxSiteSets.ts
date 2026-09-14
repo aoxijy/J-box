@@ -1,6 +1,6 @@
 import type { JBoxUserGroup } from '@/api/jbox'
 import { fetchNodeGroups, fetchProfile, saveProfile } from '@/api/jbox'
-import { directTestUrl, speedtestUrl } from '@/store/settings'
+import { customTestUrl, directTestUrl, speedtestUrl } from '@/store/settings'
 import { computed, ref } from 'vue'
 
 // 代理页「策略 / 节点」两个页签怎么分:zashboard 原来是猜的——一个组的成员如果全是
@@ -71,6 +71,8 @@ export const loadJBoxSiteSets = async () => {
     // 测速地址以档案为准(「分流与策略 → 其他」里改),面板的延迟测试跟着它
     if (profile.testUrl) speedtestUrl.value = profile.testUrl
     if (profile.directTestUrl) directTestUrl.value = profile.directTestUrl
+    // 分组测速地址选「自定义地址」时引用它;清空也要同步(留空 = 回落全局)
+    customTestUrl.value = profile.customTestUrl || ''
     // 停用的站点集不在内核里,代理页也就不用认它
     const policies = (profile.routing.policies || []).filter((p) => p.name && p.enabled !== false)
     const names = policies.map((p) => p.name)

@@ -63,6 +63,13 @@ test('validateProfilePatch dns.mode 非法值 → 报错', () => {
   assert.ok(validateProfilePatch({ dns: { mode: 'foo' } }))
 })
 
+test('validateProfilePatch customTestUrl:空字符串允许(表示不用),非 http(s) 报错', () => {
+  assert.equal(validateProfilePatch({ customTestUrl: '' }), null)
+  assert.equal(validateProfilePatch({ customTestUrl: 'https://api.openai.com/v1/models' }), null)
+  assert.ok(validateProfilePatch({ customTestUrl: 'api.openai.com' }))
+  assert.ok(validateProfilePatch({ customTestUrl: 42 }))
+})
+
 test('validateProfilePatch dns.mode 合法值(off/hijack/dnsmasq)通过', () => {
   assert.equal(validateProfilePatch({ dns: { mode: 'dnsmasq' } }), null)
   assert.equal(validateProfilePatch({ dns: { mode: 'hijack' } }), null)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { DEFAULT_DIRECT_TEST_URL, DEFAULT_TEST_URL, ensureTestUrlDefaults, kernelTestUrl } from './test-url.mjs'
+import { CUSTOM_TEST_URL_TOKEN, DEFAULT_DIRECT_TEST_URL, DEFAULT_TEST_URL, ensureTestUrlDefaults, kernelTestUrl, resolveGroupTestUrl } from './test-url.mjs'
 import { createStore } from '../store/jbox-store.mjs'
 
 const memStore = () => {
@@ -41,4 +41,21 @@ test('保留自定义 HTTP 和 HTTPS 地址；兼容早期直连默认值', () =
   custom.setProfile({ directTestUrl: 'http://www.msftconnecttest.com/connecttest.txt' })
   assert.equal(ensureTestUrlDefaults(custom), true)
   assert.equal(custom.getProfile().directTestUrl, DEFAULT_DIRECT_TEST_URL)
+})
+
+test('分组测速地址:custom 哨兵解析到档案里的自定义地址,没填回落到全局', () => {
+  const global = 'http://global.example/204'
+  const custom = 'https://api.openai.com/v1/models'
+  // 空 = 全局
+  assert.equal(resolveGroupTestUrl('', { testUrl: global, customTestUrl: custom }), global)
+  assert.equal(resolveGroupTestUrl(undefined, { testUrl: global, customTestUrl: custom }), global)
+  // custom = 自定义地址(分组测 OpenAI 这类专用地址)
+  assert.equal(resolveGroupTestUrl(CUSTOM_TEST_URL_TOKEN, { testUrl: global, customTestUrl: custom }), custom)
+  // 自定义地址留空时,引用它的分组回落全局
+  assert.equal(resolveGroupTestUrl(CUSTOM_TEST_URL_TOKEN, { testUrl: global, customTestUrl: '' }), global)
+  // 具体 URL(预设或手动输入)原样使用,忽略全局
+  assert.equal(resolveGroupTestUrl('https://github.com/robots.txt', { testUrl: global, customTestUrl: custom }), 'https://github.com/robots.txt')
+  // 全局也没有时兜到内置默认,绝不产生空 url(内核 urltest 的 url 不能为空)
+  assert.equal(resolveGroupTestUrl(CUSTOM_TEST_URL_TOKEN, {}), DEFAULT_TEST_URL)
+  assert.equal(resolveGroupTestUrl('', {}), DEFAULT_TEST_URL)
 })
