@@ -93,8 +93,9 @@ test('广告拦截排在所有站点集之前', () => {
 test('dnsmasq 模式:被 auto_redirect 改写到 tun 网段:53 的局域网 DNS 交回本机 dnsmasq,排在防回环 reject 之前', () => {
   const { route } = build({ policies: [] }, { dnsMode: 'dnsmasq', tunCidrs: ['172.19.0.0/30'], dnsmasqTag: 'dnsmasq' })
   assert.deepEqual(route.rules[1], { inbound: ['dns-in'], action: 'hijack-dns' })
+  // udp_timeout 压到 10 秒:否则每条客户端查询都会在连接表里挂满 5 分钟(面板满屏 dnsmasq)
   assert.deepEqual(route.rules[2], {
-    ip_cidr: ['172.19.0.0/30'], port: [53], action: 'route', outbound: 'dnsmasq', override_address: '127.0.0.1',
+    ip_cidr: ['172.19.0.0/30'], port: [53], action: 'route', outbound: 'dnsmasq', override_address: '127.0.0.1', udp_timeout: '10s',
   })
   assert.deepEqual(route.rules[3], { ip_cidr: ['172.19.0.0/30'], action: 'reject' })
   assert.ok(route.rules[4].ip_is_private)

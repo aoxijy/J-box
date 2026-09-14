@@ -142,10 +142,15 @@ export const buildRoute = (routing, rulesetDir, options = {}) => {
     // 转给 dns-in,局域网客户端仍然走 dnsmasq 这一层(本地主机名、按域名分流都保留)。
     // 出站必须是绑定 lo 的专用直连(见 config.mjs):全局 auto_detect_interface 会把
     // 普通直连绑到 WAN 口,拨 127.0.0.1 不通。
+    // udp_timeout 压到 10 秒:每一次客户端查询都会在连接表里登记一条「到 127.0.0.1:53」的
+    // UDP 连接,默认 5 分钟超时——实测峰值 292 条、平均 28 条(2026-09-14 现场:80 秒 129 次
+    // 查询就堆到 75 条),面板连接页满屏 dnsmasq。DNS 是「一问一答」,10 秒足够覆盖 dnsmasq 的
+    // 重试,超时后连接立刻释放。(想彻底没有这一跳,把 DNS 模式切成 hijack:内核直接接住
+    // {protocol:'dns'},本地主机名仍由 dns-local → 系统解析器 → 本机 dnsmasq 兜住。)
     if (Array.isArray(options.tunCidrs) && options.tunCidrs.length && options.dnsmasqTag) {
       rules.push({
         ip_cidr: options.tunCidrs, port: [53], action: 'route',
-        outbound: options.dnsmasqTag, override_address: '127.0.0.1',
+        outbound: options.dnsmasqTag, override_address: '127.0.0.1', udp_timeout: '10s',
       })
     }
   }

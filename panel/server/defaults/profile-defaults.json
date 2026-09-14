@@ -10,7 +10,7 @@
   "clientRoutes": [],
   "dns": {
     "split": true,
-    "mode": "dnsmasq",
+    "mode": "hijack",
     "direct": "223.5.5.5",
     "proxy": "1.1.1.1",
     "fakeIpForProxy": true,
