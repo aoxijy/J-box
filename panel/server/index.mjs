@@ -35,7 +35,7 @@ import { registerServerRoutes } from './api/servers.mjs'
 import { registerBackupRoutes } from './api/backup.mjs'
 import { registerDiagnosticsRoutes } from './api/diagnostics.mjs'
 import { readMeta } from './system/updater.mjs'
-import { seedDefaultStorage } from './system/seed-defaults.mjs'
+import { seedBundledRuleLists, seedDefaultStorage } from './system/seed-defaults.mjs'
 import { runDeploy, fetchSelections, resolveSelections, regenerateIfPlanChanged } from './api/deploy-runner.mjs'
 import { flushDnsCache } from './system/dns-cache.mjs'
 import { startScheduler } from './system/scheduler.mjs'
@@ -236,6 +236,13 @@ const revokeAccessSession = (id) => {
 // (与测试用的 createMockContext 同接口),两者都是无状态的纯对象/闭包,可安全全局复用。
 const jbPaths = createPaths(process.env.JBOX_ROOT || '/opt/j-box')
 const jbCtx = createRealContext()
+
+// 全新安装:把随包编好的规则集铺到 data/rulesets 并写状态,首次部署不必等外网下载
+try {
+  seedBundledRuleLists({ paths: jbPaths, log: (m) => console.log(m) })
+} catch (err) {
+  console.log(`[defaults] 预置规则集失败:${err instanceof Error ? err.message : err}`)
+}
 
 const parseStoredBoolean = (value) => {
   if (typeof value !== 'string') {

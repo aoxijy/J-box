@@ -71,3 +71,52 @@ export const seedDefaultStorage = ({ countConfigEntries, insert, hasKey = () => 
   if (seeded || profile) log(`[defaults] 全新安装:写入 ${seeded} 项默认面板设置${background ? '(含背景图)' : ''}${profile ? `,以及默认目标分流(${profileDefaults.routing.policies.length} 个站点集)` : ''}`)
   return { seeded, profile }
 }
+
+// 随包的规则集快照(server/defaults/rule-lists.json + server/defaults/rulesets/*.srs)。
+// 「目标分流」里的站点集可以只填一个网址(system/rule-lists.mjs 部署前下回来编成 .srs)。
+// 新装机器的路由器未必拉得动 GitHub,所以包里直接带一份编好的:第一次启动把它们铺到
+// data/rulesets 并写一份 rule-lists.json 状态,首次部署就不用等下载。
+// 只在还没有 rule-lists.json 的安装上铺一次;状态里的 at 写成此刻,24 小时内不重下,
+// 之后按 REFRESH_MS 照常过期重下(拉不动时仍沿用本地这份)。
+export const seedBundledRuleLists = ({ paths, dir = DEFAULTS_DIR, log = () => {} }) => {
+  const statePath = path.join(paths.dataDir, 'rule-lists.json')
+  if (fs.existsSync(statePath)) return { seeded: 0, lists: 0 }
+  let state
+  try {
+    state = JSON.parse(fs.readFileSync(path.join(dir, 'rule-lists.json'), 'utf8'))
+  } catch {
+    return { seeded: 0, lists: 0 }
+  }
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return { seeded: 0, lists: 0 }
+  const tags = Object.keys(state)
+  if (!tags.length) return { seeded: 0, lists: 0 }
+
+  const at = Date.now()
+  const next = {}
+  let seeded = 0
+  for (const tag of tags) {
+    const entry = state[tag]
+    if (!entry || typeof entry !== 'object' || typeof entry.url !== 'string' || !entry.url) continue
+    for (const file of [`${tag}.srs`, `${tag}-ip.srs`]) {
+      const from = path.join(dir, 'rulesets', file)
+      if (!fs.existsSync(from)) continue
+      try {
+        fs.mkdirSync(paths.rulesetDir, { recursive: true })
+        fs.copyFileSync(from, path.join(paths.rulesetDir, file))
+        seeded += 1
+      } catch (err) {
+        log(`[defaults] 预置规则集 ${file} 失败:${err instanceof Error ? err.message : err}`)
+      }
+    }
+    next[tag] = { url: entry.url, at, counts: entry.counts || {}, split: entry.split }
+  }
+  if (!seeded) return { seeded: 0, lists: Object.keys(next).length }
+  try {
+    fs.writeFileSync(statePath, `${JSON.stringify(next, null, 2)}\n`)
+  } catch (err) {
+    log(`[defaults] 写 rule-lists.json 失败:${err instanceof Error ? err.message : err}`)
+    return { seeded, lists: Object.keys(next).length }
+  }
+  log(`[defaults] 全新安装:预置 ${seeded} 份规则集(${Object.keys(next).length} 条链接),首次部署不必联网下载`)
+  return { seeded, lists: Object.keys(next).length }
+}

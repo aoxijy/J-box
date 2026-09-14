@@ -6,8 +6,8 @@ const nodes = ['香港-01', '香港-02', '美国-01'].map((tag) => ({ tag }))
 
 // emitUserGroups 的输出永远以两个内置出站(直连/拒绝)开头;大多数用例只关心用户的组
 const userOnly = (outbounds) => outbounds.filter((o) => o.type !== 'direct' && o.type !== 'block')
-const emitUser = (groups, ns) => {
-  const r = emitUserGroups(groups, ns)
+const emitUser = (groups, ns, options) => {
+  const r = emitUserGroups(groups, ns, options)
   return { ...r, outbounds: userOnly(r.outbounds) }
 }
 
@@ -118,24 +118,49 @@ test('故障转移:别的组可以把故障转移父组当成员,但拿不到内
   assert.deepEqual(outbounds.find((o) => o.tag === '手动').outbounds, ['主备'])
 })
 
-test('默认两个组:所有-自动(urltest) 与 所有-手动(selector),成员都是全部节点', () => {
-  const { outbounds, dropped } = emitUser(defaultGroups(), nodes)
+test('随包的默认组:按快照落地分组结构,但不带节点——空的静态组挂直连占位,动态组吃全部节点', () => {
+  const customTestUrl = 'https://api.openai.com/v1/models'
+  const { outbounds, dropped } = emitUser(defaultGroups(), nodes, { customTestUrl })
   assert.equal(dropped.length, 0)
   assert.deepEqual(outbounds.map((o) => [o.tag, o.type]), [
+    ['CHATGPT自动', 'urltest'],
+    ['香港-自动', 'urltest'],
+    ['亚洲-自动', 'urltest'],
+    ['美国-自动', 'urltest'],
+    ['其他-自动', 'urltest'],
     ['所有-自动', 'urltest'],
     ['所有-手动', 'selector'],
   ])
-  assert.deepEqual(outbounds[0].outbounds, ['香港-01', '香港-02', '美国-01'])
-  assert.equal(outbounds[0].interval, '300s')
-  assert.equal(outbounds[0].tolerance, 100)
+  // 静态组的成员表在随包快照里是空的:没有节点时挂直连占位,有节点也不凭空引用别人的节点名
+  for (const tag of ['CHATGPT自动', '香港-自动', '亚洲-自动', '美国-自动', '其他-自动']) {
+    assert.deepEqual(outbounds.find((o) => o.tag === tag).outbounds, ['直连'])
+  }
+  // 两个动态组是"当前所有有效节点"
+  assert.deepEqual(outbounds.find((o) => o.tag === '所有-自动').outbounds, ['香港-01', '香港-02', '美国-01'])
+  assert.deepEqual(outbounds.find((o) => o.tag === '所有-手动').outbounds, ['香港-01', '香港-02', '美国-01'])
+  const chatgpt = outbounds.find((o) => o.tag === 'CHATGPT自动')
+  assert.equal(chatgpt.interval, '300s')
+  assert.equal(chatgpt.tolerance, 300)
+  assert.equal(chatgpt.idle_timeout, '12h')
+  assert.equal(chatgpt.url, 'https://api.openai.com/v1/models')
   // selector 不该带 urltest 才有的字段
-  assert.equal(outbounds[1].interval, undefined)
-  assert.equal(outbounds[1].tolerance, undefined)
+  assert.equal(outbounds.find((o) => o.tag === '所有-手动').interval, undefined)
+  assert.equal(outbounds.find((o) => o.tag === '所有-手动').tolerance, undefined)
+})
+
+test('随包的分组快照里没有任何节点成员(不把作者的节点名发出去)', async () => {
+  const fs = await import('node:fs')
+  const snapshot = JSON.parse(fs.readFileSync(new URL('../defaults/groups-defaults.json', import.meta.url), 'utf8'))
+  assert.ok(snapshot.length >= 5)
+  for (const g of snapshot) {
+    assert.deepEqual(g.members, [], `${g.name} 的成员表应为空`)
+  }
 })
 
 test('allNodes 是动态的:节点变了,组的成员跟着变', () => {
-  const before = emitUser(defaultGroups(), nodes).outbounds[0].outbounds
-  const after = emitUser(defaultGroups(), [{ tag: '新节点' }]).outbounds[0].outbounds
+  const pick = (ns) => emitUser(defaultGroups(), ns).outbounds.find((o) => o.tag === '所有-自动').outbounds
+  const before = pick(nodes)
+  const after = pick([{ tag: '新节点' }])
   assert.equal(before.length, 3)
   assert.deepEqual(after, ['新节点'])
 })
@@ -286,10 +311,20 @@ test('图标不进 sing-box 出站:那边没有这个字段', () => {
   assert.ok(!('icon' in outbounds[0]), '出站里不该出现 icon')
 })
 
-test('默认列表:直连、拒绝两个内置出站在前,两个默认组自带地球图标', () => {
+test('默认列表:内置出站与随包分组都在,各自带自己的图标', () => {
   assert.deepEqual(
     defaultGroups().map((g) => [g.name, g.icon]),
-    [['直连', 'misc:dart'], ['所有-自动', 'globe:earth-asia'], ['所有-手动', 'globe:earth-meridians'], ['拒绝', 'misc:cross']],
+    [
+      ['CHATGPT自动', 'brand:githubcopilot'],
+      ['香港-自动', 'HK'],
+      ['亚洲-自动', 'globe:earth-asia'],
+      ['美国-自动', 'US'],
+      ['其他-自动', 'globe:earth-meridians'],
+      ['所有-自动', 'globe:earth-asia'],
+      ['所有-手动', 'globe:earth-meridians'],
+      ['直连', 'misc:dart'],
+      ['拒绝', 'misc:cross'],
+    ],
   )
 })
 

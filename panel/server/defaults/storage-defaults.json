@@ -17,6 +17,7 @@
   "config/connection-table-columns": "[\"close\",\"sourceIP\",\"chains\",\"host\",\"dlSpeed\",\"ulSpeed\",\"dl\",\"ul\",\"connectTime\"]",
   "config/custom-background-image": "local-image-1788361724032",
   "config/custom-global-node-name": "GLOBAL",
+  "config/custom-test-url": "https://api.openai.com/v1/models",
   "config/dark-theme": "dark",
   "config/dashboard-transparent": "75",
   "config/default-theme": "emerald",

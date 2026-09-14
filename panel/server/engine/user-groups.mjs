@@ -16,6 +16,9 @@
 //   3. 不能有环(自引用或互相引用)—— check 同样不拦
 // 也就是说"生成的配置能过 check"并不足以保证这几点,只能在生成时自己挡。
 
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { keywordMatches, normalizeForMatch } from './rename.mjs'
 import { parseDuration } from './duration.mjs'
 
@@ -96,33 +99,46 @@ export const idleTimeoutFor = (idleTimeout, interval) => {
 
 // 两个开箱即用的组:一份自动择优、一份手动指定,成员都是"当前所有有效节点"。
 // allNodes 是动态的——订阅刷新后节点变了,组的成员跟着变,不需要用户回来重新勾一遍。
-export const defaultGroups = () => ([
-  builtinDefaults()[0],
-  {
-    id: 'all-auto',
-    name: '所有-自动',
-    type: 'urltest',
-    // 这两个组是跨地区的,配国旗都不对,默认就给地球;不给的话新装出来是两个空图标,
-    // 每个人都得自己去挑一次
-    icon: 'globe:earth-asia',
-    mode: 'dynamic',
-    keywords: [],
-    members: [],
-    interval: DEFAULT_INTERVAL,
-    tolerance: DEFAULT_TOLERANCE,
-    idleTimeout: DEFAULT_IDLE_TIMEOUT,
-  },
-  {
-    id: 'all-manual',
-    name: '所有-手动',
-    type: 'selector',
-    icon: 'globe:earth-meridians',
-    mode: 'dynamic',
-    keywords: [],
-    members: [],
-  },
-  builtinDefaults()[1],
-])
+//
+// 随包还有一份「出站分组」快照(server/defaults/groups-defaults.json,取自长期在用的那台
+// 路由器):分组名 / 类型 / 检测参数 / 图标 / 动态关键词照抄,但**不含节点**——成员表统一
+// 清空,新装机器的节点来自用户自己的订阅,导入后在同一处勾选即可。文件不在(被裁剪过的包)
+// 就回落到下面内置的两条。
+const GROUPS_DEFAULTS_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'defaults', 'groups-defaults.json')
+
+export const defaultGroups = () => {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(GROUPS_DEFAULTS_PATH, 'utf8'))
+    if (Array.isArray(parsed) && parsed.length) return parsed
+  } catch { /* 落到内置默认 */ }
+  return [
+    builtinDefaults()[0],
+    {
+      id: 'all-auto',
+      name: '所有-自动',
+      type: 'urltest',
+      // 这两个组是跨地区的,配国旗都不对,默认就给地球;不给的话新装出来是两个空图标,
+      // 每个人都得自己去挑一次
+      icon: 'globe:earth-asia',
+      mode: 'dynamic',
+      keywords: [],
+      members: [],
+      interval: DEFAULT_INTERVAL,
+      tolerance: DEFAULT_TOLERANCE,
+      idleTimeout: DEFAULT_IDLE_TIMEOUT,
+    },
+    {
+      id: 'all-manual',
+      name: '所有-手动',
+      type: 'selector',
+      icon: 'globe:earth-meridians',
+      mode: 'dynamic',
+      keywords: [],
+      members: [],
+    },
+    builtinDefaults()[1],
+  ]
+}
 
 const isNonEmptyString = (v) => typeof v === 'string' && v.trim().length > 0
 

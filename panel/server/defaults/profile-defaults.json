@@ -1,4 +1,54 @@
 {
+  "region": "CN",
+  "ipv6": false,
+  "ipv6Proxy": "node",
+  "directForNodes": true,
+  "tun": {
+    "autoRedirect": true
+  },
+  "servers": [],
+  "clientRoutes": [],
+  "dns": {
+    "split": true,
+    "mode": "dnsmasq",
+    "direct": "223.5.5.5",
+    "proxy": "1.1.1.1",
+    "rewrite": {
+      "initialized": 1,
+      "rules": [
+        {
+          "id": "default-services-googleapis-cn",
+          "enabled": true,
+          "source": "services.googleapis.cn",
+          "domain": "services.googleapis.com",
+          "addresses": [],
+          "note": ""
+        },
+        {
+          "id": "default-developers-google-cn",
+          "enabled": true,
+          "source": "developers.google.cn",
+          "domain": "developers.google.com",
+          "addresses": [],
+          "note": ""
+        }
+      ]
+    }
+  },
+  "traffic": {
+    "keepMonths": 3
+  },
+  "testUrl": "http://www.gstatic.com/generate_204",
+  "directTestUrl": "http://connectivitycheck.platform.hicloud.com/generate_204",
+  "customTestUrl": "https://api.openai.com/v1/models",
+  "updates": {
+    "jbox": {
+      "auto": false,
+      "hour": 4,
+      "channel": "auto",
+      "checkChannel": "auto"
+    }
+  },
   "routing": {
     "proxyTag": "PROXY",
     "regions": [
@@ -41,127 +91,86 @@
         "id": "policy-1788339689004",
         "name": "AI",
         "icon": "brand:openai-light",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-category-ai-!cn"
-        ],
+        "default": "CHATGPT自动",
+        "rulesets": [],
         "domain": [],
         "domainSuffix": [],
         "domainKeyword": [],
-        "ipCidr": []
+        "ipCidr": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/ai-platform-domain.mrs",
+          "https://github.com/aoxijy/guize/releases/latest/download/ai-platform-ipcidr.mrs"
+        ]
       },
       {
-        "id": "policy-1788349674530",
-        "name": "Youtube",
-        "icon": "brand:youtube",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-youtube"
+        "id": "policy-1789360228530",
+        "name": "社交聊天",
+        "icon": "brand:whatsapp",
+        "iconScale": 0,
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/social-chat-domain.mrs",
+          "https://github.com/aoxijy/guize/releases/latest/download/social-chat-ipcidr.mrs"
         ],
         "domain": [],
         "domainSuffix": [],
         "domainKeyword": [],
-        "ipCidr": []
+        "ipCidr": [],
+        "default": "香港-自动"
       },
       {
-        "id": "policy-1788503446572",
-        "name": "TikTok",
-        "icon": "brand:tiktok",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-tiktok",
-          "geosite-tiktok@!cn"
+        "id": "policy-1789359985677",
+        "name": "微软苹果",
+        "icon": "brand:apple",
+        "iconScale": 0,
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/microsoft-apple-domain.mrs",
+          "https://github.com/aoxijy/guize/releases/latest/download/microsoft-apple-ipcidr.mrs"
         ],
         "domain": [],
         "domainSuffix": [],
         "domainKeyword": [],
-        "ipCidr": []
+        "ipCidr": [],
+        "default": "香港-自动"
       },
       {
-        "id": "policy-1788503496373",
-        "name": "Netflix",
-        "icon": "brand:netflix-mono",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-netflix",
-          "geoip-netflix"
+        "id": "policy-1789360127844",
+        "name": "国外媒体",
+        "icon": "misc:film",
+        "iconScale": 0,
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/foreign-media-domain.mrs",
+          "https://github.com/aoxijy/guize/releases/latest/download/foreign-media-ipcidr.mrs"
         ],
         "domain": [],
         "domainSuffix": [],
         "domainKeyword": [],
-        "ipCidr": []
+        "ipCidr": [],
+        "default": "香港-自动"
       },
       {
-        "id": "policy-1788467369681",
-        "name": "Github",
-        "icon": "brand:github-mono",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-github"
+        "id": "policy-1789364490585",
+        "name": "开发平台",
+        "icon": "brand:github",
+        "iconScale": 0,
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/developer-platform-domain.mrs",
+          "https://github.com/aoxijy/guize/releases/latest/download/developer-platform-ipcidr.mrs"
         ],
         "domain": [],
         "domainSuffix": [],
         "domainKeyword": [],
-        "ipCidr": []
-      },
-      {
-        "id": "policy-1788338176669",
-        "name": "Google",
-        "icon": "brand:google",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-google"
-        ],
-        "domain": [],
-        "domainSuffix": [],
-        "domainKeyword": [],
-        "ipCidr": []
-      },
-      {
-        "id": "policy-1788339749192",
-        "name": "Microsoft",
-        "icon": "brand:microsoft",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-microsoft"
-        ],
-        "domain": [],
-        "domainSuffix": [],
-        "domainKeyword": [],
-        "ipCidr": []
-      },
-      {
-        "id": "policy-1788367850896",
-        "name": "Apple",
-        "icon": "brand:apple-light",
-        "default": "direct",
-        "rulesets": [
-          "geosite-apple"
-        ],
-        "domain": [],
-        "domainSuffix": [],
-        "domainKeyword": [],
-        "ipCidr": []
-      },
-      {
-        "id": "policy-1788368131895",
-        "name": "Games",
-        "icon": "misc:game-soft",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-steam",
-          "geosite-sony"
-        ],
-        "domain": [],
-        "domainSuffix": [],
-        "domainKeyword": [],
-        "ipCidr": []
+        "ipCidr": [],
+        "default": "香港-自动"
       },
       {
         "id": "policy-1788494862755",
         "name": "国外",
         "icon": "globe:earth-americas",
-        "default": "proxy",
+        "default": "香港-自动",
         "rulesets": [
           "geosite-gfw",
           "geoip-cloudflare",
@@ -173,6 +182,20 @@
           "geoip-telegram",
           "geoip-tor",
           "geoip-twitter"
+        ],
+        "domain": [],
+        "domainSuffix": [],
+        "domainKeyword": [],
+        "ipCidr": []
+      },
+      {
+        "id": "policy-1788368131895",
+        "name": "Games",
+        "icon": "misc:game-soft",
+        "default": "香港-自动",
+        "rulesets": [
+          "geosite-steam",
+          "geosite-sony"
         ],
         "domain": [],
         "domainSuffix": [],
@@ -192,14 +215,40 @@
         "domain": [],
         "domainSuffix": [],
         "domainKeyword": [],
-        "ipCidr": []
+        "ipCidr": [],
+        "ruleUrls": [
+          "https://raw.githubusercontent.com/aoxijy/guize/refs/heads/main/00.list"
+        ]
+      },
+      {
+        "id": "policy-1789352530220",
+        "name": "拦截",
+        "icon": "misc:cross",
+        "iconScale": 0,
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/reject-domain.mrs"
+        ],
+        "domain": [],
+        "domainSuffix": [],
+        "domainKeyword": [],
+        "ipCidr": [],
+        "default": "block"
       }
     ],
     "adBlock": false,
     "adRuleset": "geosite-category-ads-all",
+    "categories": [],
+    "directRulesets": [
+      "geosite-cn",
+      "geoip-cn"
+    ],
+    "fallback": "PROXY",
     "regionId": "cn",
     "fallbackDefault": "direct",
-    "fallbackName": "其他",
-    "fallbackIcon": "globe:generic"
-  }
+    "fallbackName": "漏网之鱼",
+    "fallbackIcon": "misc:fish",
+    "fallbackIconScale": 0
+  },
+  "rulesetDir": "/opt/j-box/data/rulesets"
 }

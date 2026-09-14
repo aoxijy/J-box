@@ -1,0 +1,105 @@
+{
+  "list-0741d628": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/developer-platform-domain.mrs",
+    "at": 0,
+    "counts": {
+      "domain": 3,
+      "domain_suffix": 130
+    },
+    "split": 2
+  },
+  "list-11a31bf7": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/social-chat-ipcidr.mrs",
+    "at": 0,
+    "counts": {
+      "ip_cidr": 70
+    },
+    "split": 2
+  },
+  "list-2aecb3f9": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/ai-platform-ipcidr.mrs",
+    "at": 0,
+    "counts": {
+      "ip_cidr": 2
+    },
+    "split": 2
+  },
+  "list-3a178daf": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/developer-platform-ipcidr.mrs",
+    "at": 0,
+    "counts": {
+      "ip_cidr": 22
+    },
+    "split": 2
+  },
+  "list-43bd695e": {
+    "url": "https://raw.githubusercontent.com/aoxijy/guize/refs/heads/main/00.list",
+    "at": 0,
+    "counts": {
+      "domain_suffix": 19,
+      "ip_cidr": 3
+    },
+    "split": 2
+  },
+  "list-4bf7a662": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/ai-platform-domain.mrs",
+    "at": 0,
+    "counts": {
+      "domain": 22,
+      "domain_suffix": 59
+    },
+    "split": 2
+  },
+  "list-717658cb": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/microsoft-apple-domain.mrs",
+    "at": 0,
+    "counts": {
+      "domain": 13,
+      "domain_suffix": 2221
+    },
+    "split": 2
+  },
+  "list-7bdf6e08": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/microsoft-apple-ipcidr.mrs",
+    "at": 0,
+    "counts": {
+      "ip_cidr": 13
+    },
+    "split": 2
+  },
+  "list-7ed32560": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/foreign-media-ipcidr.mrs",
+    "at": 0,
+    "counts": {
+      "ip_cidr": 1223
+    },
+    "split": 2
+  },
+  "list-84c0a230": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/social-chat-domain.mrs",
+    "at": 0,
+    "counts": {
+      "domain": 7,
+      "domain_suffix": 835
+    },
+    "split": 2
+  },
+  "list-c5cfe427": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/reject-domain.mrs",
+    "at": 0,
+    "counts": {
+      "domain": 1,
+      "domain_suffix": 155
+    },
+    "split": 2
+  },
+  "list-ca178b03": {
+    "url": "https://github.com/aoxijy/guize/releases/latest/download/foreign-media-domain.mrs",
+    "at": 0,
+    "counts": {
+      "domain": 143,
+      "domain_suffix": 33976
+    },
+    "split": 2
+  }
+}

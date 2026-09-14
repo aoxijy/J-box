@@ -3,7 +3,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import { loadStorageDefaults, seedDefaultStorage } from './seed-defaults.mjs'
+
+const DEFAULTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'defaults')
 
 const tmpDir = () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ob-defaults-'))
@@ -46,8 +49,8 @@ test('全新安装同时写入默认档案(目标分流);已有 jbox/profile 或
   const defaults = loadProfileDefaults()
   assert.ok(defaults && defaults.routing && defaults.routing.policies.length >= 5, '随包的 profile-defaults.json 要有一套站点集')
   const names = defaults.routing.policies.map((p) => p.name)
-  for (const n of ['AI', 'Youtube', 'Google', 'Microsoft', 'Apple', 'Games', '国内']) assert.ok(names.includes(n), n)
-  assert.equal(defaults.routing.fallbackName, '其他')
+  for (const n of ['AI', '社交聊天', '微软苹果', '国外媒体', '开发平台', '国外', 'Games', '国内', '拦截']) assert.ok(names.includes(n), n)
+  assert.equal(defaults.routing.fallbackName, '漏网之鱼')
   // 不带任何个人域名
   // 默认档案取自作者自己的路由器,发出去之前必须把个人域名摘干净
   const PERSONAL = /angeworld|opendoor|superdoor|wanhouse|wan\.family|ok1248/
@@ -69,4 +72,77 @@ test('全新安装同时写入默认档案(目标分流);已有 jbox/profile 或
   const r3 = seedDefaultStorage({ countConfigEntries: () => 5, insert: (k, v) => old.set(k, v), hasKey: (k) => old.has(k) })
   assert.equal(r3.profile, false)
   assert.equal(old.size, 0)
+})
+
+test('全新安装预置规则集:把随包 .srs 铺进 data/rulesets 并写状态;已有状态时不动', async () => {
+  const { seedBundledRuleLists } = await import('./seed-defaults.mjs')
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ob-rulesets-'))
+  const dir = path.join(root, 'defaults')
+  fs.mkdirSync(path.join(dir, 'rulesets'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'rulesets', 'list-aaaa.srs'), 'srs-domain')
+  fs.writeFileSync(path.join(dir, 'rulesets', 'list-aaaa-ip.srs'), 'srs-ip')
+  fs.writeFileSync(path.join(dir, 'rule-lists.json'), JSON.stringify({
+    'list-aaaa': { url: 'https://example.com/a.mrs', at: 0, counts: { domain: 2, ip_cidr: 1 }, split: 2 },
+  }))
+  const paths = { dataDir: path.join(root, 'data'), rulesetDir: path.join(root, 'data', 'rulesets') }
+  const r = seedBundledRuleLists({ paths, dir })
+  assert.equal(r.seeded, 2)
+  assert.equal(r.lists, 1)
+  assert.equal(fs.readFileSync(path.join(paths.rulesetDir, 'list-aaaa.srs'), 'utf8'), 'srs-domain')
+  assert.equal(fs.readFileSync(path.join(paths.rulesetDir, 'list-aaaa-ip.srs'), 'utf8'), 'srs-ip')
+  const state = JSON.parse(fs.readFileSync(path.join(paths.dataDir, 'rule-lists.json'), 'utf8'))
+  assert.equal(state['list-aaaa'].url, 'https://example.com/a.mrs')
+  assert.ok(state['list-aaaa'].at > 0)
+  assert.deepEqual(state['list-aaaa'].counts, { domain: 2, ip_cidr: 1 })
+  assert.equal(state['list-aaaa'].split, 2)
+  // 第二次(已有状态):不重铺,也不改已有的 at
+  const at = state['list-aaaa'].at
+  assert.deepEqual(seedBundledRuleLists({ paths, dir }), { seeded: 0, lists: 0 })
+  assert.equal(JSON.parse(fs.readFileSync(path.join(paths.dataDir, 'rule-lists.json'), 'utf8'))['list-aaaa'].at, at)
+})
+
+test('随包的规则集快照和默认档案对得上:档案里每条规则集链接都有编好的 .srs 与状态', async () => {
+  const { loadProfileDefaults } = await import('./seed-defaults.mjs')
+  const { listTagForUrl } = await import('../engine/rule-list.mjs')
+  const state = JSON.parse(fs.readFileSync(path.join(DEFAULTS_DIR, 'rule-lists.json'), 'utf8'))
+  const profile = loadProfileDefaults()
+  const urls = []
+  for (const p of profile.routing.policies) for (const u of (p.ruleUrls || [])) urls.push(u)
+  assert.ok(urls.length > 0, '默认档案里要有规则集链接')
+  for (const url of urls) {
+    const tag = listTagForUrl(url)
+    assert.ok(state[tag], `缺少 ${tag} 的状态`)
+    assert.equal(state[tag].url, url)
+    assert.ok(
+      fs.existsSync(path.join(DEFAULTS_DIR, 'rulesets', `${tag}.srs`)) || fs.existsSync(path.join(DEFAULTS_DIR, 'rulesets', `${tag}-ip.srs`)),
+      `缺少 ${tag} 的 .srs`,
+    )
+  }
+})
+
+test('预置的规则集让首次部署不必联网:ensureRuleLists 直接用这份快照', async () => {
+  const { seedBundledRuleLists, loadProfileDefaults } = await import('./seed-defaults.mjs')
+  const { ensureRuleLists } = await import('./rule-lists.mjs')
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ob-offline-'))
+  const paths = { dataDir: path.join(root, 'data'), rulesetDir: path.join(root, 'data', 'rulesets') }
+  const seeded = seedBundledRuleLists({ paths, dir: DEFAULTS_DIR })
+  assert.ok(seeded.seeded > 0)
+  const routing = loadProfileDefaults().routing
+  const ctx = {
+    exists: async (p) => fs.existsSync(p),
+    readFile: async (p) => fs.readFileSync(p, 'utf8'),
+    writeFile: async (p, d) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, d) },
+    mkdirp: async (p) => { fs.mkdirSync(p, { recursive: true }) },
+    remove: async (p) => { fs.rmSync(p, { force: true }) },
+    exec: async () => { throw new Error('本地文件是最新版式,不该调用内核重新编译') },
+  }
+  let fetched = 0
+  const r = await ensureRuleLists(ctx, paths, routing, { fetchImpl: async () => { fetched += 1; throw new Error('offline') } })
+  assert.equal(r.ok, true)
+  assert.equal(fetched, 0, '预置的文件与状态都新鲜,一次网络都不该发')
+  assert.deepEqual(r.updated, [])
+  assert.deepEqual(r.failed, [])
+  // 形状表拿得到,生成配置时才知道每条链接该引用哪几份 .srs
+  const tag = Object.keys(r.lists)[0]
+  assert.ok(r.lists[tag].domain || r.lists[tag].ip)
 })
