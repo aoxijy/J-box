@@ -131,10 +131,12 @@ test('随包的默认组:按快照落地分组结构,但不带节点——空的
     ['所有-自动', 'urltest'],
     ['所有-手动', 'selector'],
   ])
-  // 静态组的成员表在随包快照里是空的:没有节点时挂直连占位,有节点也不凭空引用别人的节点名
-  for (const tag of ['CHATGPT自动', '香港-自动', '亚洲-自动', '美国-自动', '其他-自动']) {
-    assert.deepEqual(outbounds.find((o) => o.tag === tag).outbounds, ['直连'])
-  }
+  // 地区组现在按关键词动态收编;未命中节点的组挂直连占位
+  assert.deepEqual(outbounds.find((o) => o.tag === 'CHATGPT自动').outbounds, ['美国-01'])
+  assert.deepEqual(outbounds.find((o) => o.tag === '香港-自动').outbounds, ['香港-01', '香港-02'])
+  assert.deepEqual(outbounds.find((o) => o.tag === '亚洲-自动').outbounds, ['直连'])
+  assert.deepEqual(outbounds.find((o) => o.tag === '美国-自动').outbounds, ['美国-01'])
+  assert.deepEqual(outbounds.find((o) => o.tag === '其他-自动').outbounds, ['直连'])
   // 两个动态组是"当前所有有效节点"
   assert.deepEqual(outbounds.find((o) => o.tag === '所有-自动').outbounds, ['香港-01', '香港-02', '美国-01'])
   assert.deepEqual(outbounds.find((o) => o.tag === '所有-手动').outbounds, ['香港-01', '香港-02', '美国-01'])
@@ -163,6 +165,34 @@ test('allNodes 是动态的:节点变了,组的成员跟着变', () => {
   const after = pick([{ tag: '新节点' }])
   assert.equal(before.length, 3)
   assert.deepEqual(after, ['新节点'])
+})
+
+test('地区策略组按关键词动态收编订阅节点:CHATGPT自动覆盖美国/亚洲/其它,专属组按地区匹配', () => {
+  const groups = defaultGroups()
+  const byName = Object.fromEntries(groups.map((g) => [g.name, g]))
+  for (const name of ['CHATGPT自动', '香港-自动', '亚洲-自动', '美国-自动', '其他-自动']) {
+    assert.equal(byName[name].mode, 'dynamic', `${name} 应为动态组`)
+  }
+  assert.deepEqual(byName['CHATGPT自动'].keywords, ['美国', '亚洲', '其它'])
+  assert.deepEqual(byName['香港-自动'].keywords, ['香港'])
+  assert.deepEqual(byName['亚洲-自动'].keywords, ['亚洲'])
+  assert.deepEqual(byName['美国-自动'].keywords, ['美国'])
+  assert.deepEqual(byName['其他-自动'].keywords, ['其它'])
+
+  const subscribed = [
+    { tag: '机场 | 美国-01' },
+    { tag: '机场 | 香港-01' },
+    { tag: '机场 | 新加坡-01', regionName: '亚洲' },
+    { tag: '机场 | 土耳其-01', regionName: '其它' },
+    { tag: '机场 | 日本-01', regionName: '亚洲' },
+  ]
+  const outbounds = emitUser(groups, subscribed).outbounds
+  const members = Object.fromEntries(outbounds.map((o) => [o.tag, o.outbounds]))
+  assert.deepEqual(members['CHATGPT自动'], ['机场 | 美国-01', '机场 | 新加坡-01', '机场 | 土耳其-01', '机场 | 日本-01'])
+  assert.deepEqual(members['香港-自动'], ['机场 | 香港-01'])
+  assert.deepEqual(members['亚洲-自动'], ['机场 | 新加坡-01', '机场 | 日本-01'])
+  assert.deepEqual(members['美国-自动'], ['机场 | 美国-01'])
+  assert.deepEqual(members['其他-自动'], ['机场 | 土耳其-01'])
 })
 
 // 以下三条是 sing-box check 挡不住、必须由生成器自己保证的(见模块头注释)
