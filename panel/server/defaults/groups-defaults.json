@@ -7,7 +7,7 @@
     "enabled": true,
     "icon": "brand:githubcopilot",
     "iconScale": 0,
-    "keywords": ["美国", "亚洲", "其它"],
+    "keywords": ["美国", "亚洲", "其他"],
     "members": [],
     "testUrl": "custom",
     "interval": "300s",
