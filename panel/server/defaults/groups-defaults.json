@@ -10,8 +10,8 @@
     "keywords": ["美国", "亚洲", "其他"],
     "members": [],
     "testUrl": "custom",
-    "interval": "300s",
-    "tolerance": 300,
+    "interval": "600s",
+    "tolerance": 500,
     "idleTimeout": "12h"
   },
   {
@@ -25,8 +25,8 @@
     "keywords": ["香港"],
     "members": [],
     "testUrl": "",
-    "interval": "300s",
-    "tolerance": 100,
+    "interval": "600s",
+    "tolerance": 500,
     "idleTimeout": "12h"
   },
   {
@@ -40,8 +40,8 @@
     "keywords": ["亚洲"],
     "members": [],
     "testUrl": "",
-    "interval": "300s",
-    "tolerance": 100,
+    "interval": "600s",
+    "tolerance": 500,
     "idleTimeout": "12h"
   },
   {
@@ -55,8 +55,8 @@
     "keywords": ["美国"],
     "members": [],
     "testUrl": "",
-    "interval": "300s",
-    "tolerance": 100,
+    "interval": "600s",
+    "tolerance": 500,
     "idleTimeout": "12h"
   },
   {
@@ -70,8 +70,8 @@
     "keywords": ["其他"],
     "members": [],
     "testUrl": "",
-    "interval": "300s",
-    "tolerance": 100,
+    "interval": "600s",
+    "tolerance": 500,
     "idleTimeout": "12h"
   },
   {
@@ -85,8 +85,8 @@
     "keywords": [],
     "members": [],
     "testUrl": "",
-    "interval": "300s",
-    "tolerance": 100,
+    "interval": "600s",
+    "tolerance": 500,
     "idleTimeout": "12h"
   },
   {

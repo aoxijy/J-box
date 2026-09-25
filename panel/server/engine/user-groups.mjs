@@ -36,8 +36,8 @@ export const laneSubTag = (groupId, laneId) => `${FAILOVER_INTERNAL_PREFIX}${gro
 // 主备页签最多 3 个(主用 + 备用 1 + 备用 2):再多没有意义,页签栏也摆不下
 export const FAILOVER_MAX_LANES = 3
 export const FAILOVER_DEFAULTS = Object.freeze({
-  interval: '300s',
-  tolerance: 100,
+  interval: '600s',
+  tolerance: 500,
   timeoutMs: 5000,
   failureThreshold: 2,
   restorePrimary: true,
@@ -75,10 +75,9 @@ export const builtinDefaults = () => ([
 // 默认测速地址在 engine/test-url.mjs(HTTP;Clash API 与内核自动探测共用),这里转出去给老的引用方
 export { DEFAULT_TEST_URL } from './test-url.mjs'
 import { DEFAULT_TEST_URL, resolveGroupTestUrl } from './test-url.mjs'
-// 新建自动择优组的默认:300 秒测一次(面板服务端按这个间隔硬性定时测,见 system/latency-scheduler.mjs)、
-// 容差 100ms(差不到 100ms 不换节点,免得几十毫秒的抖动让选中的节点跳来跳去)
-export const DEFAULT_INTERVAL = '300s'
-export const DEFAULT_TOLERANCE = 100
+// 新建自动择优组默认每 600 秒检测一次;容差 500ms,减少延迟微抖导致的频繁换节点。
+export const DEFAULT_INTERVAL = '600s'
+export const DEFAULT_TOLERANCE = 500
 // 自动择优组多久不用就停止健康检查。内核的默认值是 30 分钟(constant.DefaultURLTestIdleTimeout):
 // 一个组超过 30 分钟没有流量经过,它自己的定时检查就停了,再也不重测、也不重新择优——直到
 // 下次有连接走它才重新启动(sing-box protocol/group/urltest.go 的 Touch / loopCheck)。

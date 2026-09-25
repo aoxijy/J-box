@@ -43,8 +43,8 @@ test('故障转移:归一化后固定静态、members/keywords 清空、lanes �
     { id: 'lane-2', name: '', icon: '', members: ['香港-02'] },
     { id: 'A~', name: '备', icon: '', members: [] },
   ])
-  assert.equal(g.interval, '300s')
-  assert.equal(g.tolerance, 100)
+  assert.equal(g.interval, '600s')
+  assert.equal(g.tolerance, 500)
   assert.deepEqual(g.failover, { timeoutMs: 5000, failureThreshold: 2, restorePrimary: false, recoveryHoldMs: 60000 })
   // 页签最多 3 个,多出来的读取时丢掉(写入时 API 直接拒)
   const many = normalizeGroup(failoverGroup({ lanes: [1, 2, 3, 4, 5].map((i) => ({ id: `L${i}`, members: ['香港-01'] })) }))
@@ -58,8 +58,8 @@ test('故障转移:单节点页签直接引用节点,多节点页签生成内部
   assert.ok(sub, '多节点页签应生成内部 urltest 子组')
   assert.equal(sub.tag, '__fo:fo1:B')
   assert.deepEqual(sub.outbounds, ['香港-02', '美国-01'])
-  assert.equal(sub.interval, '300s')
-  assert.equal(sub.tolerance, 100)
+  assert.equal(sub.interval, '600s')
+  assert.equal(sub.tolerance, 500)
   assert.equal(sub.idle_timeout, '12h')
   assert.deepEqual(parent, {
     type: 'selector', tag: '主备', outbounds: ['香港-01', '__fo:fo1:B', '拒绝'], default: '香港-01', interrupt_exist_connections: true,
@@ -73,7 +73,7 @@ test('故障转移:单节点页签直接引用节点,多节点页签生成内部
   assert.equal(failover[0].tag, '主备')
   assert.equal(failover[0].rejectTag, '拒绝')
   assert.deepEqual(failover[0].lanes.map((l) => [l.id, l.mode, l.ref]), [['A', 'single', '香港-01'], ['B', 'urltest', '__fo:fo1:B']])
-  assert.equal(failover[0].settings.intervalMs, 300000)
+  assert.equal(failover[0].settings.intervalMs, 600000)
   assert.equal(failover[0].settings.failureThreshold, 2)
 })
 
@@ -141,8 +141,8 @@ test('随包的默认组:按快照落地分组结构,但不带节点——空的
   assert.deepEqual(outbounds.find((o) => o.tag === '所有-自动').outbounds, ['香港-01', '香港-02', '美国-01'])
   assert.deepEqual(outbounds.find((o) => o.tag === '所有-手动').outbounds, ['香港-01', '香港-02', '美国-01'])
   const chatgpt = outbounds.find((o) => o.tag === 'CHATGPT自动')
-  assert.equal(chatgpt.interval, '300s')
-  assert.equal(chatgpt.tolerance, 300)
+  assert.equal(chatgpt.interval, '600s')
+  assert.equal(chatgpt.tolerance, 500)
   assert.equal(chatgpt.idle_timeout, '12h')
   assert.equal(chatgpt.url, 'https://api.openai.com/v1/models')
   // selector 不该带 urltest 才有的字段
@@ -249,8 +249,8 @@ test('normalizeGroup:非法类型回落 selector,非法容差回落默认值', (
   assert.equal(g.type, 'selector')
   assert.equal(g.tolerance, undefined) // selector 不带这个字段
   const u = normalizeGroup({ name: 'Y', type: 'urltest', tolerance: 'abc' })
-  assert.equal(u.tolerance, 100)
-  assert.equal(u.interval, '300s')
+  assert.equal(u.tolerance, 500)
+  assert.equal(u.interval, '600s')
 })
 
 // -------- 动态组(按关键词现挑成员) --------
@@ -444,8 +444,8 @@ test('自动择优组带 idle_timeout:内核默认 30 分钟不用就停止健�
   )
   const group = outbounds.find((o) => o.tag === '自动')
   assert.equal(group.type, 'urltest')
-  assert.equal(group.interval, '300s')
-  assert.equal(group.tolerance, 100)
+  assert.equal(group.interval, '600s')
+  assert.equal(group.tolerance, 500)
   assert.equal(group.idle_timeout, '12h')
   // 组自己填了就用组的
   const custom = emitUserGroups(
