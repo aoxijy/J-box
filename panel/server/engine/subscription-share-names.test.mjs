@@ -18,7 +18,7 @@ test('shares use the same automatic names, manual overrides and current prefix a
   const expected = new Map(imported.renamed.map((node) => [node.originalTag, node.tag]))
   const output = applySubscriptionShareNames(content, sub)
   assert.deepEqual(names(output), parseSubscription(content).nodes.map((node) => expected.get(node.originalTag)))
-  assert.deepEqual(names(output), ['机场 | 香港-001', '机场 | 日本-001', '机场 | 家里 $&', '机场 | 香港-002'])
+  assert.deepEqual(names(output), ['机场 | 香港-001', '机场 | 亚洲-001', '机场 | 家里 $&', '机场 | 香港-002'])
   assert.deepEqual(output.split('\n').map((line) => line.split('#')[0]), content.split('\n').map((line) => line.split('#')[0]))
 })
 
