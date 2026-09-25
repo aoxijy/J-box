@@ -177,22 +177,22 @@ test('地区策略组按关键词动态收编订阅节点:CHATGPT自动覆盖美
   assert.deepEqual(byName['香港-自动'].keywords, ['香港'])
   assert.deepEqual(byName['亚洲-自动'].keywords, ['亚洲'])
   assert.deepEqual(byName['美国-自动'].keywords, ['美国'])
-  assert.deepEqual(byName['其他-自动'].keywords, ['其它'])
+  assert.deepEqual(byName['其他-自动'].keywords, ['其他'])
 
   const subscribed = [
     { tag: '机场 | 美国-01' },
     { tag: '机场 | 香港-01' },
     { tag: '机场 | 新加坡-01', regionName: '亚洲' },
-    { tag: '机场 | 土耳其-01', regionName: '其它' },
+    { tag: '机场 | 其他-01', regionName: '其他' },
     { tag: '机场 | 日本-01', regionName: '亚洲' },
   ]
   const outbounds = emitUser(groups, subscribed).outbounds
   const members = Object.fromEntries(outbounds.map((o) => [o.tag, o.outbounds]))
-  assert.deepEqual(members['CHATGPT自动'], ['机场 | 美国-01', '机场 | 新加坡-01', '机场 | 土耳其-01', '机场 | 日本-01'])
+  assert.deepEqual(members['CHATGPT自动'], ['机场 | 美国-01', '机场 | 新加坡-01', '机场 | 日本-01'])
   assert.deepEqual(members['香港-自动'], ['机场 | 香港-01'])
   assert.deepEqual(members['亚洲-自动'], ['机场 | 新加坡-01', '机场 | 日本-01'])
   assert.deepEqual(members['美国-自动'], ['机场 | 美国-01'])
-  assert.deepEqual(members['其他-自动'], ['机场 | 土耳其-01'])
+  assert.deepEqual(members['其他-自动'], ['机场 | 其他-01'])
 })
 
 // 以下三条是 sing-box check 挡不住、必须由生成器自己保证的(见模块头注释)

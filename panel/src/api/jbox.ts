@@ -224,6 +224,7 @@ export interface JBoxProfileDefaults {
 export interface JBoxRenameRegionEntry {
   code: string
   name: string
+  icon?: string
   keywords: string[]
 }
 

@@ -354,7 +354,7 @@ test('refresh 成功后只替换该订阅节点,其它订阅节点不受影响',
     const aNodes = nodes.filter((n) => n.subscriptionId === createA.id)
     const bNode = nodes.find((n) => n.subscriptionId !== createA.id)
     assert.equal(aNodes.length, 2) // 该订阅节点已替换为新的两个
-    assert.equal(bNode.tag, '日本-01') // 另一条订阅的节点未受影响
+    assert.equal(bNode.tag, '亚洲-01') // 另一条订阅的日本节点仍未受影响
   } finally {
     await close()
   }

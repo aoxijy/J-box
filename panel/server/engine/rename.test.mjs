@@ -20,6 +20,13 @@ test('matchRegion 覆盖缩写/中文/城市/emoji', () => {
   assert.equal(matchRegion('unknown-place', DEFAULT_REGION_DICT), null)
 })
 
+test('亚洲规则可识别指定的中英文地区关键词', () => {
+  const keywords = ['jp', 'japan', '日本', '东京', '東京', '大阪', 'sg', 'singapore', '新加坡', '狮城', '獅城', 'tw', 'taiwan', '台湾', '台灣', '臺灣', '台北', 'kr', 'korea', '韩国', '韓國', '首尔', '首爾']
+  for (const keyword of keywords) {
+    assert.equal(matchRegion(`节点-${keyword}-01`, DEFAULT_REGION_DICT).name, '亚洲', `${keyword} 应识别为亚洲`)
+  }
+})
+
 test('matchRegion 短 ASCII 码需 token 边界,避免子串误配(修复4)', () => {
   assert.equal(matchRegion('Russia-01', DEFAULT_REGION_DICT), null)
   assert.equal(matchRegion('Sweden', DEFAULT_REGION_DICT), null)
@@ -41,7 +48,7 @@ test('extractFeatures 返回命中的关键词本身(转大写),按关键词表�
 test('词典结构完整', () => {
   assert.ok(DEFAULT_REGION_DICT.length >= 8)
   for (const r of DEFAULT_REGION_DICT) {
-    assert.ok(r.code && r.name && Array.isArray(r.keywords) && r.keywords.length > 0)
+    assert.ok((r.code || r.name === '亚洲') && r.name && Array.isArray(r.keywords) && r.keywords.length > 0)
   }
 })
 
@@ -68,7 +75,7 @@ test('旧档案的两层 featureDict 仍能读:扁平化成关键词表(语义�
 
 test('renameNodes 序号按 区域+特征 组合独立递增', () => {
   const out = renameNodes([mk('香港 01'), mk('香港 02'), mk('日本 01')])
-  assert.deepEqual(out.map((n) => n.tag), ['香港-01', '香港-02', '日本-01'])
+  assert.deepEqual(out.map((n) => n.tag), ['亚洲-01', '香港-01', '香港-02'])
 })
 
 test('renameNodes 未命中区域:归到"其他"并正常编号,不再把原名塞进 feature 位', () => {

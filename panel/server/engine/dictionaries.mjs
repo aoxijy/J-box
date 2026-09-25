@@ -1,4 +1,5 @@
 export const DEFAULT_REGION_DICT = [
+  { code: '', name: '亚洲', keywords: ['jp', 'japan', '日本', '东京', '東京', '大阪', 'sg', 'singapore', '新加坡', '狮城', '獅城', 'tw', 'taiwan', '台湾', '台灣', '臺灣', '台北', 'kr', 'korea', '韩国', '韓國', '首尔', '首爾'] },
   { code: 'US', name: '美国', keywords: ['us', 'united states', 'america', '美国', '美國', '洛杉矶', '洛杉磯', '硅谷', '圣何塞', '西雅图', '纽约'] },
   { code: 'HK', name: '香港', keywords: ['hk', 'hong kong', 'hongkong', '香港', '深港'] },
   { code: 'JP', name: '日本', keywords: ['jp', 'japan', '日本', '东京', '東京', '大阪'] },

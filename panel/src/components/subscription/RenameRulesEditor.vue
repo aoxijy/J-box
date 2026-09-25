@@ -126,10 +126,12 @@
                  手写的名字)在按钮上显示它原来的名字,不会被悄悄清掉。 -->
             <div class="w-32 shrink-0">
               <CountrySelect
-                :model-value="row.code"
+                :model-value="row.icon || row.code"
                 :placeholder="row.name || $t('subscriptionRenameRegionNamePlaceholder')"
+                :globes="true"
                 @update:model-value="pickCountry(row, $event)"
               />
+              <span v-if="row.icon" class="text-base-content/60 ml-1 text-xs">{{ row.name }}</span>
             </div>
             <input
               v-model="row.keywordsText"
@@ -237,6 +239,7 @@ interface RegionRow {
   // ISO 3166-1 alpha-2;空 = 这一行还没绑定国家(老档案里手写的名字)
   code: string
   name: string
+  icon: string
   keywordsText: string
 }
 
@@ -247,13 +250,14 @@ const makeId = () =>
 
 // 用不带空格的英文逗号拼接:分隔符本身就是逗号,后面那个空格只是显示习惯,
 // 而它会让用户以为空格是格式的一部分(splitKeywords 本来就会 trim,加不加都能解析)。
-const toRegionRows = (dict: { code?: string; name: string; keywords: string[] }[]): RegionRow[] =>
+const toRegionRows = (dict: { code?: string; name: string; icon?: string; keywords: string[] }[]): RegionRow[] =>
   dict.map((entry) => ({
     id: makeId(),
     // 老档案里 code 存的是一个随机行号(那时它不表示国家),认不出来就退回按名字认
     // ——存的就是「香港」「美国」这些,正好能对上目录。两条都认不出才留空(自定义地区)。
     code: findCountry(entry.code || '')?.code || findCountryByName(entry.name)?.code || '',
     name: entry.name,
+    icon: entry.icon || '',
     keywordsText: entry.keywords.join(','),
   }))
 
@@ -263,6 +267,11 @@ const toRegionRows = (dict: { code?: string; name: string; keywords: string[] }[
 // 反过来,只要有一个词不属于上一个国家(用户自己加的),整行就不动——精心加过的
 // 关键词不该因为换个国家就没了。
 const pickCountry = (row: RegionRow, code: string) => {
+  if (code.startsWith('globe:')) {
+    row.icon = code
+    return
+  }
+  row.icon = ''
   const country = findCountry(code)
   if (!country) return
   const previous = findCountry(row.code)
@@ -298,9 +307,15 @@ const unknownLabel = ref(init?.unknownLabel || DEFAULT_UNKNOWN_LABEL)
 const seqPad = ref(init?.seqPad ?? DEFAULT_SEQ_PAD)
 // 必须是 ref 而不是 reactive:vuedraggable 的 v-model 在拖放结束时会**整体赋一个新
 // 数组**,reactive 数组没法被重新赋值,拖了不会生效。
-const regionRows = ref<RegionRow[]>(
-  toRegionRows(init?.regionDict?.length ? init.regionDict : DEFAULT_REGION_DICT),
-)
+const initialRegionDict = init?.regionDict?.length ? init.regionDict : DEFAULT_REGION_DICT
+// 已有订阅也补上「亚洲」规则,且放在国家规则前面,否则 jp 等词先被日本行截获。
+const asiaIndex = initialRegionDict.findIndex((entry) => entry.name === '亚洲')
+const regionDictWithAsia = asiaIndex === 0
+  ? initialRegionDict
+  : asiaIndex > 0
+    ? [initialRegionDict[asiaIndex], ...initialRegionDict.filter((_, index) => index !== asiaIndex)]
+    : [DEFAULT_REGION_DICT[0], ...initialRegionDict]
+const regionRows = ref<RegionRow[]>(toRegionRows(regionDictWithAsia))
 // 特征只有一行:命中哪个关键词就显示哪个词(转大写)。旧档案里的两层 featureDict
 // 会被扁平化过来,不至于一升级就把用户配过的词全丢掉。
 const initialFeatureKeywords =
@@ -364,7 +379,7 @@ const options = computed<JBoxRenameOptions>(() => ({
   regionDict: regionRows.value
     .filter((row) => row.name.trim() || row.keywordsText.trim())
     // code 是国家代码(没挑国家的行留空),不再是行号:节点的国别归属就是靠它带出去的
-    .map((row) => ({ code: row.code, name: row.name.trim(), keywords: splitKeywords(row.keywordsText) })),
+    .map((row) => ({ code: row.code, name: row.name.trim(), icon: row.icon || undefined, keywords: splitKeywords(row.keywordsText) })),
   featureKeywords: splitKeywords(featureKeywordsText.value),
   excludeKeywords: splitKeywords(excludeKeywordsText.value),
 }))
