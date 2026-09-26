@@ -1,6 +1,24 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createStore, DEFAULT_PROFILE, KEYS } from './jbox-store.mjs'
+import { defaultGroups } from '../engine/user-groups.mjs'
+const oldReleaseDefaultGroups = () => {
+  const regional = [
+    { id: 'g-1789350557846', name: 'CHATGPT自动', icon: 'brand:githubcopilot', testUrl: 'custom', tolerance: 300 },
+    { id: 'g-1789350194599', name: '香港-自动', icon: 'HK', testUrl: '', tolerance: 100 },
+    { id: 'g-1789350236691', name: '亚洲-自动', icon: 'globe:earth-asia', testUrl: '', tolerance: 100 },
+    { id: 'g-1789350262328', name: '美国-自动', icon: 'US', testUrl: '', tolerance: 100 },
+    { id: 'g-1789350283340', name: '其他-自动', icon: 'globe:earth-meridians', testUrl: '', tolerance: 100 },
+  ]
+  const previousById = new Map(regional.map(({ id, name, icon, testUrl, tolerance }) => [id, {
+    id, name, type: 'urltest', mode: 'static', enabled: true, icon, iconScale: 0,
+    keywords: [], members: [], testUrl, interval: '300s', tolerance, idleTimeout: '12h',
+  }]))
+  return [...previousById.values(), {
+    id: 'all-auto', name: '所有-自动', type: 'urltest', mode: 'dynamic', enabled: true,
+    icon: 'globe:earth-asia', iconScale: 0, keywords: [], members: [], testUrl: '', interval: '300s', tolerance: 100, idleTimeout: '12h',
+  }, ...defaultGroups().filter((group) => ['all-manual', 'builtin-direct', 'builtin-block'].includes(group.id))]
+}
 
 const memStore = () => {
   const m = new Map()
@@ -14,6 +32,56 @@ const memStore = () => {
   }
 }
 
+test('升级时迁移未修改的 v0.1.195 默认自动组到动态分组,保留额外用户组并写回', () => {
+  const { store, m } = memStore()
+  const previous = oldReleaseDefaultGroups()
+  previous.push({ id: 'my-custom', name: '我自己的组', type: 'selector', mode: 'static', enabled: true, keywords: [], members: ['node-1'] })
+  m.set(KEYS.groups, JSON.stringify(previous))
+
+  const migrated = store.getGroups()
+  const expected = new Map([
+    ['CHATGPT自动', ['美国', '亚洲', '其他']],
+    ['香港-自动', ['香港']],
+    ['亚洲-自动', ['亚洲']],
+    ['美国-自动', ['美国']],
+    ['其他-自动', ['其他']],
+  ])
+  for (const [name, keywords] of expected) {
+    const group = migrated.find((item) => item.name === name)
+    assert.equal(group.mode, 'dynamic', name)
+    assert.deepEqual(group.keywords, keywords, name)
+    assert.equal(group.interval, '600s', name)
+    assert.equal(group.tolerance, 500, name)
+  }
+  assert.equal(migrated.find((item) => item.name === '所有-自动').interval, '600s')
+  assert.deepEqual(migrated.find((item) => item.id === 'my-custom').members, ['node-1'])
+  assert.deepEqual(JSON.parse(m.get(KEYS.groups)), migrated)
+})
+
+test('旧版任一地区默认组被用户修改时不做整套默认迁移', () => {
+  const { store, m } = memStore()
+  const previous = oldReleaseDefaultGroups()
+  const customHongKong = previous.find((group) => group.name === '香港-自动')
+  customHongKong.keywords = ['手工关键词']
+  m.set(KEYS.groups, JSON.stringify(previous))
+
+  const stored = store.getGroups()
+  assert.deepEqual(stored.find((group) => group.name === '香港-自动').keywords, ['手工关键词'])
+  assert.equal(stored.find((group) => group.name === 'CHATGPT自动').mode, 'static')
+  assert.equal(stored.find((group) => group.name === '亚洲-自动').interval, '300s')
+})
+
+test('旧版默认组增加未知字段时视为自定义,不做整套迁移', () => {
+  const { store, m } = memStore()
+  const previous = oldReleaseDefaultGroups()
+  previous.find((group) => group.name === '香港-自动').userNote = 'keep-me'
+  m.set(KEYS.groups, JSON.stringify(previous))
+
+  const stored = store.getGroups()
+  assert.equal(stored.find((group) => group.name === '香港-自动').mode, 'static')
+  assert.equal(stored.find((group) => group.name === 'CHATGPT自动').mode, 'static')
+  assert.equal(stored.find((group) => group.name === '亚洲-自动').interval, '300s')
+})
 test('getProfile 无值返回默认', () => {
   const { store } = memStore()
   assert.deepEqual(store.getProfile(), DEFAULT_PROFILE)

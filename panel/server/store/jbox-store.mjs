@@ -195,15 +195,63 @@ export const createStore = ({ get, set, del }, { randomHex = defaultRandomHex } 
     return generated
   }
 
-  // 用户自定义节点组。第一次读取时落地两个默认组(所有-自动 / 所有-手动)并写回,
-  // 这样"默认值"只在这里定义一次,前端拿到的永远是真实存在的记录,而不是靠界面
-  // 自己临时编两条出来。
+  const migrateUnchangedReleaseDefaults = (list) => {
+    const shippedDefaults = defaultGroups()
+    const currentById = new Map(shippedDefaults.map((group) => [group.id, group]))
+    const legacyById = new Map()
+    const legacyNames = ['CHATGPT自动', '香港-自动', '亚洲-自动', '美国-自动', '其他-自动', '所有-自动']
+    const requiredRegionNames = legacyNames.slice(0, 5)
+
+    for (const name of legacyNames) {
+      const current = shippedDefaults.find((group) => group.name === name)
+      if (!current) return null
+      legacyById.set(current.id, {
+        ...current,
+        mode: name === '所有-自动' ? 'dynamic' : 'static',
+        keywords: [],
+        members: [],
+        interval: '300s',
+        tolerance: name === 'CHATGPT自动' ? 300 : 100,
+      })
+    }
+
+    const matchesLegacyDefault = (group, legacy) => {
+      if (!group || Object.keys(group).length !== Object.keys(legacy).length) return false
+      return Object.entries(legacy).every(([key, value]) => JSON.stringify(group[key]) === JSON.stringify(value))
+    }
+
+    // 只有整套地区组仍与旧版随包默认完全一致时才迁移;少一个、改过任意设置都视为用户配置。
+    for (const name of requiredRegionNames) {
+      const legacy = [...legacyById.values()].find((group) => group.name === name)
+      if (!list.some((group) => group.id === legacy.id && matchesLegacyDefault(group, legacy))) return null
+    }
+
+    let changed = false
+    const migrated = list.map((group) => {
+      const legacy = legacyById.get(group.id)
+      const current = currentById.get(group.id)
+      if (!legacy || !current || !matchesLegacyDefault(group, legacy)) return group
+      changed = true
+      return current
+    })
+    return changed ? normalizeGroups(migrated) : null
+  }
+
+  // 用户自定义节点组。第一次读取时落地随包默认组;升级时只迁移未被用户修改过的旧版整套默认,
+  // 避免 SQLite 中已持久化的旧静态组让新 release 的动态地区规则永远不生效。
   const getGroups = () => {
     const raw = get(KEYS.groups)
     if (raw) {
       try {
         const list = JSON.parse(raw)
-        if (Array.isArray(list)) return normalizeGroups(list)
+        if (Array.isArray(list)) {
+          const migrated = migrateUnchangedReleaseDefaults(list)
+          if (migrated) {
+            set(KEYS.groups, JSON.stringify(migrated))
+            return migrated
+          }
+          return normalizeGroups(list)
+        }
       } catch { /* 落到下面的默认值 */ }
     }
     const seeded = normalizeGroups(defaultGroups())

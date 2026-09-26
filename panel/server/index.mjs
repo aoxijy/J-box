@@ -50,7 +50,7 @@ import { createPaths } from './system/paths.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
-const distDir = path.join(rootDir, 'dist')
+const distDir = process.env.ZASHBOARD_DIST_DIR || path.join(rootDir, 'dist')
 const dataDir = path.join(rootDir, 'data')
 const dbPath = process.env.ZASHBOARD_DB_PATH || path.join(dataDir, 'zashboard.sqlite')
 const host = process.env.HOST || '0.0.0.0'
@@ -1262,7 +1262,7 @@ if (fs.existsSync(distDir)) {
 
   app.get(/^(?!\/api\/).*/, (_req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
-    res.sendFile(path.join(distDir, 'index.html'))
+    res.sendFile('index.html', { root: distDir })
   })
 }
 

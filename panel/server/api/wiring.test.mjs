@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test, { after } from 'node:test'
-import { fileURLToPath } from 'node:url'
 
 // 独立临时 DB + 真实监听端口,验证 Task 10 把五个 J-Box 路由模块真正装配进了
 // panel/server/index.mjs:既要在守卫之下(未设密时 403),也要在设密之后真正打到
@@ -15,19 +14,12 @@ const dbPath = path.join(tempDir, 'zashboard.sqlite')
 
 process.env.ZASHBOARD_DB_PATH = dbPath
 
-// index.mjs 在模块加载时就用 fs.existsSync(distDir) 决定要不要挂静态资源与 SPA
-// fallback,所以「有没有前端构建产物」必须在 import 之前就确定下来。此前这里什么也
-// 不做,于是本文件的 SPA fallback 用例实际取决于「这台机器上之前有没有人跑过构建」:
-// 本地留着旧的 panel/dist 就过,CI 里测试跑在构建之前就 404。测试自己把前置条件准备
-// 好,结果才是确定的。dist/ 已在 .gitignore 里,真正的构建会覆盖这个占位文件。
-const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../dist')
-const distIndex = path.join(distDir, 'index.html')
-let createdDistPlaceholder = false
-if (!existsSync(distIndex)) {
-  mkdirSync(distDir, { recursive: true })
-  writeFileSync(distIndex, '<!doctype html><title>jbox test placeholder</title>')
-  createdDistPlaceholder = true
-}
+// index.mjs 在模块加载时就按 ZASHBOARD_DIST_DIR 决定 SPA fallback 是否存在。
+// 每个测试进程使用自己的 dist,避免并行跑测试时互相删掉对方的前端占位文件。
+const distDir = path.join(tempDir, 'dist')
+mkdirSync(distDir, { recursive: true })
+writeFileSync(path.join(distDir, 'index.html'), '<!doctype html><title>jbox wiring test</title>')
+process.env.ZASHBOARD_DIST_DIR = distDir
 
 const serverModuleUrl = new URL('./../index.mjs?test=wiring', import.meta.url)
 const { server, shutdownServer } = await import(serverModuleUrl.href)
@@ -46,10 +38,6 @@ const baseUrl = await listenEphemeral(server)
 after(async () => {
   await shutdownServer().catch(() => {})
   await fs.rm(tempDir, { recursive: true, force: true })
-  // 只清理本测试自己造的占位 dist,不碰真实构建产物。
-  if (createdDistPlaceholder) {
-    rmSync(distDir, { recursive: true, force: true })
-  }
 })
 
 const JBOX_ROUTES = [
