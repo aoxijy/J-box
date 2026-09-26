@@ -6,6 +6,9 @@ import { createNode } from './node-model.mjs'
 const mk = (name) => createNode({ tag: name, type: 'trojan', server: 'a.com', server_port: 443, fields: { password: 'x', tls: { enabled: true } }, source: 'sharelink' })
 
 test('matchRegion 覆盖缩写/中文/城市/emoji', () => {
+  assert.deepEqual(DEFAULT_REGION_DICT.map((entry) => entry.name), ['亚洲', '美国', '香港', '日本', '新加坡', '台湾', '韩国', '英国', '德国', '中国'])
+  assert.equal(matchRegion('欧非地區 01', DEFAULT_REGION_DICT), null)
+  assert.equal(matchRegion('法国 01', DEFAULT_REGION_DICT), null)
   assert.equal(matchRegion('US-CA-01', DEFAULT_REGION_DICT).name, '美国')
   assert.equal(matchRegion('洛杉矶 03', DEFAULT_REGION_DICT).name, '美国')
   // 中国(回国 / 中转)默认在词典里,且排最后:带地区词的 CN2 线路仍归原地区,纯 CN2 不算中国
