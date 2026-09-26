@@ -119,7 +119,7 @@
         class="flex flex-col gap-1.5"
       >
         <template #item="{ element: row }">
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-start gap-1.5">
             <Bars3Icon class="drag-handle text-base-content/40 h-4 w-4 shrink-0 cursor-move" />
             <!-- 一行 = 一个国家/地区。绑到具体国家(而不是随手写的名字)之后,才谈得上
                  配一面对应的国旗,匹配出来的节点也才有国别可言。还没绑上的(老档案里
@@ -393,7 +393,7 @@ watch(
 )
 
 const addRegionRow = () => {
-  regionRows.value.push({ id: makeId(), code: '', name: '', keywordsText: '' })
+  regionRows.value.push({ id: makeId(), code: '', name: '', icon: '', keywordsText: '' })
 }
 const removeRegionRow = (id: string) => {
   const index = regionRows.value.findIndex((row) => row.id === id)

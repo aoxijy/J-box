@@ -25,6 +25,8 @@ import { registerLatencyHistoryRoutes } from './api/latency-history.mjs'
 import { createLatencyHistory } from './system/latency-history.mjs'
 import { createLatencyScheduler } from './system/latency-scheduler.mjs'
 import { createProbeCoordinator } from './system/probe-coordinator.mjs'
+import { createAiOptimizer } from './system/ai-optimizer-manager.mjs'
+import { registerAiOptimizerRoutes } from './api/ai-optimizer.mjs'
 import { createFailoverManager } from './system/failover-manager.mjs'
 import { createDnsRewriteServer } from './system/dns-rewrite-server.mjs'
 import { DNS_REWRITE_TAG, ensureDnsRewriteDefaults } from './engine/dns-rewrite.mjs'
@@ -1149,6 +1151,8 @@ const latencyHistory = createLatencyHistory({ store })
 const probeCoordinator = createProbeCoordinator({ store, fetchImpl: globalThis.fetch })
 const latencyScheduler = createLatencyScheduler({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, coordinator: probeCoordinator, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
 registerLatencyHistoryRoutes(app, { history: latencyHistory, scheduler: latencyScheduler })
+const aiOptimizer = createAiOptimizer({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, coordinator: probeCoordinator, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
+registerAiOptimizerRoutes(app, { optimizer: aiOptimizer })
 // 故障转移组的后台主备管理(system/failover-manager.mjs):按 config.meta.json 里的运行映射定期端到端探测各页签
 // 的节点、组内先恢复、组间按顺序转移、主用恢复后切回、全部失败切兜底拒绝。跟随服务端生命周期,浏览器关了照样跑
 const failoverManager = createFailoverManager({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, coordinator: probeCoordinator, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
@@ -1316,6 +1320,7 @@ websocketServer.on('connection', relayControllerWebSocket)
 const startServer = async () => {
   trafficCollector.start()
   latencyScheduler.start()
+  aiOptimizer.start()
   failoverManager.start()
   dnsRewriteServer.start().catch(() => {})
   dnsFilterObserver.start()
@@ -1370,6 +1375,7 @@ const shutdownServer = async () => {
   // 先把攒着没写的流量增量落盘,再关库
   trafficCollector.stop()
   latencyScheduler.stop()
+  aiOptimizer.stop()
   failoverManager.stop()
   dnsRewriteServer.stop()
   clearInterval(dnsFilterTimer)

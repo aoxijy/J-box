@@ -360,7 +360,10 @@ export const emitUserGroups = (groups, nodes, options = {}) => {
   // 一个都没命中的组挂直连占位:配置里一定有它,而且它不会反过来引用任何组
   const placeholderTag = builtin.direct
   const placeholders = []
+  const aiGroups = []
 
+  // AI 优选开启时,由 J-Box 后台按延迟历史接管自动组选择;组改用 selector 供 Clash API 控制。
+  const aiOptimizerEnabled = options.aiOptimizer?.enabled === true
   // 故障转移:内部出站(页签子组 / 兜底拒绝)的 tag,和每个父组的运行映射(给后台管理器和界面用)
   const internal = new Set()
   const failover = []
@@ -437,7 +440,12 @@ export const emitUserGroups = (groups, nodes, options = {}) => {
       members = [placeholderTag]
       placeholders.push(g.name)
     }
-    if (g.type === 'urltest') {
+    if (g.type === 'urltest' && aiOptimizerEnabled) {
+      outbounds.push({ type: 'selector', tag: g.name, outbounds: members, default: members[0] })
+      if (members[0] !== placeholderTag) {
+        aiGroups.push({ tag: g.name, url: groupTestUrl(g), intervalMs: parseDuration(g.interval || DEFAULT_INTERVAL), members: [...members] })
+      }
+    } else if (g.type === 'urltest') {
       outbounds.push({
         type: 'urltest',
         tag: g.name,
@@ -455,5 +463,5 @@ export const emitUserGroups = (groups, nodes, options = {}) => {
   // publicTags:能出现在节点管理列表、站点集出口候选、别的组候选里的出站(内置 + 用户组的父组);
   // 内部子组 / 兜底拒绝只在 outbounds 里,不在这份清单里
   const publicTags = outbounds.filter((o) => !internal.has(o.tag)).map((o) => o.tag)
-  return { outbounds, dropped, placeholders, builtin, internalTags: [...internal], publicTags, failover }
+  return { outbounds, dropped, placeholders, builtin, internalTags: [...internal], publicTags, failover, aiGroups }
 }

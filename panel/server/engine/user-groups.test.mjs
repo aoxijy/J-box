@@ -467,6 +467,24 @@ test('图标缩放:整数、限在 ±20,缺省 0', async () => {
   assert.equal(normalizeGroup({ name: 'x' }).iconScale, 0)
 })
 
+test('AI takeover converts every URLTest group to its own selector and preserves each group URL/member scope', () => {
+  const groups = [
+    { id: 'chatgpt', name: 'CHATGPT 自动', type: 'urltest', mode: 'static', members: ['美国-01'], testUrl: 'https://chatgpt.example/generate' },
+    { id: 'asia', name: '亚洲-自动', type: 'urltest', mode: 'static', members: ['香港-01'], testUrl: 'https://probe.example/ping' },
+  ]
+  const generated = emitUserGroups(groups, nodes, { aiOptimizer: { enabled: true } })
+  for (const name of ['CHATGPT 自动', '亚洲-自动']) {
+    assert.equal(generated.outbounds.find((o) => o.tag === name).type, 'selector')
+  }
+  assert.deepEqual(generated.aiGroups.map((g) => [g.tag, g.members, g.url]), [
+    ['CHATGPT 自动', ['美国-01'], 'https://chatgpt.example/generate'],
+    ['亚洲-自动', ['香港-01'], 'https://probe.example/ping'],
+  ])
+  const native = emitUserGroups(groups, nodes).outbounds
+  assert.equal(native.find((o) => o.tag === 'CHATGPT 自动').type, 'urltest')
+})
+
+
 test('interval 比 idle_timeout 长时 idle_timeout 抬到和 interval 一样(sing-box 要求 interval ≤ idle_timeout,check 查不出、启动才炸)', async () => {
   const { emitUserGroups, idleTimeoutFor } = await import('./user-groups.mjs')
   assert.equal(idleTimeoutFor('12h', '5m'), '12h')

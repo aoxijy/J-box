@@ -93,6 +93,7 @@ export const buildConfig = ({ nodes, profile, userGroups, systemDns, localSubnet
   const { outbounds: userGroupOutbounds, builtin, publicTags } = emitUserGroups(userGroups || [], nodes, {
     testUrl: profile.testUrl,
     customTestUrl: profile.customTestUrl,
+    aiOptimizer: profile.aiOptimizer,
   })
 
   // 每个站点集在内核里就是一个同名 selector,成员是「出站」页签里选中的那几类

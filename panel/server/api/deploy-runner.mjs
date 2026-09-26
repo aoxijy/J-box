@@ -250,8 +250,8 @@ export const buildCurrentConfig = (store, systemDns, { geoDir = createPaths(proc
   }
   // 故障转移的运行映射(父组 / 页签 / 有效节点 / 子组 tag / 检测参数):和配置同一次生成,写进 config.meta.json
   // 给后台管理器和界面用
-  const { failover } = emitUserGroups(store.getGroups(), nodes, { testUrl: profile.testUrl, customTestUrl: profile.customTestUrl })
-  return { config, profile, failover }
+  const { aiGroups } = emitUserGroups(store.getGroups(), nodes, { testUrl: profile.testUrl, customTestUrl: profile.customTestUrl, aiOptimizer: profile.aiOptimizer })
+  return { config, profile, failover, aiGroups }
 }
 
 // 「保存设置」与「让设置生效」之间只隔一次启动内核:各个设置页只管把自己那块写进档案,
@@ -386,10 +386,10 @@ const runDeployInner = async ({ store, ctx, paths, fetchImpl = globalThis.fetch,
         geoDir: paths.geoDir, cacheFilePath: paths.cacheDb, selections, tlsCert: { certPath: paths.tlsCert, keyPath: paths.tlsKey }, localSubnets, directHostCidrs,
         ruleLists: ruleLists.lists, nativeBypass,
       }
-      const { config, profile, failover } = buildCurrentConfig(store, systemDns, buildOptions)
+      const { config, profile, failover, aiGroups } = buildCurrentConfig(store, systemDns, buildOptions)
       const prepMs = Date.now() - startedAt
       result = await deployConfig(ctx, paths, {
-        config, profile, userGroups: store.getGroups(), selections, isCancelled, nativeBypass, failover,
+        config, profile, userGroups: store.getGroups(), selections, isCancelled, nativeBypass, failover, aiGroups,
         rebuild: (profilePatch) => buildCurrentConfig(store, systemDns, { ...buildOptions, profilePatch }).config,
       })
       if (result.warning) console.warn(`[deploy] ${result.warning}`)

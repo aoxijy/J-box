@@ -84,7 +84,7 @@ export const autoRedirectFallbackWarning = (fatal) =>
 
 // rebuild(profilePatch):按改过的档案重新生成一份配置(见 api/deploy-runner.mjs)。只在 auto_redirect
 // 起不来要降级重试时用;不传就不降级,照旧回滚直连。
-export const deployConfig = async (ctx, paths, { config, profile, userGroups, selections = {}, isCancelled = () => false, rebuild, nativeBypass: bypassGiven, failover = [] } = {}) => {
+export const deployConfig = async (ctx, paths, { config, profile, userGroups, selections = {}, isCancelled = () => false, rebuild, nativeBypass: bypassGiven, failover = [], aiGroups = [] } = {}) => {
   // 每一步花了多久:随结果一起带回去写进日志,"重启要一分钟"这种反馈能直接看到卡在哪
   const timings = {}
   let stepStart = Date.now()
@@ -179,6 +179,7 @@ export const deployConfig = async (ctx, paths, { config, profile, userGroups, se
           // 故障转移的运行映射:父组 id / tag、页签 id / 顺序 / 有效节点 / 子组 tag / 派生模式、检测参数。
           // 后台管理器只按已经部署的这份做主备决策(弹窗里保存了还没生效的定义不算)
           failover: Array.isArray(failover) ? failover : [],
+          aiGroups: Array.isArray(aiGroups) ? aiGroups : [],
           // 这次部署里进了内核 dns.rules 的 DNS 重写源域名:规则改了没重启,规则页和状态接口拿它对照
           dnsRewrite: enabledRewriteSources(dnsRewrite),
           // 第一层:DNS 怎么分(none / domains / all)、入口有没有原生旁路、终端来源的 DNS 规则

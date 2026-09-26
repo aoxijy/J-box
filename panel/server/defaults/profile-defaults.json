@@ -39,6 +39,19 @@
   "traffic": {
     "keepMonths": 3
   },
+  "aiOptimizer": {
+    "enabled": false,
+    "policyPriority": 50,
+    "asnPriority": false,
+    "sensitivityMs": 50,
+    "collectTrainingData": false,
+    "minSamples": 5,
+    "maxSampleAgeHours": 168,
+    "latencyWeight": 70,
+    "reliabilityWeight": 30,
+    "jitterWeight": 20,
+    "intervalSeconds": 60
+  },
   "testUrl": "https://www.google.com/generate_204",
   "directTestUrl": "http://connectivitycheck.platform.hicloud.com/generate_204",
   "customTestUrl": "https://api.openai.com/v1/models",

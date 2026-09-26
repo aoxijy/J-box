@@ -209,6 +209,19 @@ export interface JBoxProfile {
   customTestUrl?: string
   // 每日流量这些分析数据留多久(月,1~36)
   traffic?: { keepMonths?: number }
+  aiOptimizer?: {
+    enabled?: boolean
+    policyPriority?: number
+    asnPriority?: boolean
+    sensitivityMs?: number
+    collectTrainingData?: boolean
+    minSamples?: number
+    maxSampleAgeHours?: number
+    latencyWeight?: number
+    reliabilityWeight?: number
+    jitterWeight?: number
+    intervalSeconds?: number
+  }
   rulesetDir?: string
 }
 
@@ -1151,6 +1164,9 @@ export interface JBoxTerminalTest {
 export const fetchTerminalCapability = () => requestJson<JBoxTerminalCapability>('/api/jbox/terminal-test/capability')
 export const testTerminal = (target: string, port?: number) =>
   requestJson<JBoxTerminalTest>('/api/jbox/terminal-test', { method: 'POST', body: JSON.stringify({ target, port }) })
+
+export const fetchAiOptimizerStatus = () => requestJson<{ enabled: boolean; groups: { tag: string; url: string; members: number; selected: string }[]; lastRunAt: number; lastError: string; tested: number; switched: number; shared: number }>('/api/jbox/ai-optimizer/status')
+export const runAiOptimizerNow = () => requestJson<{ enabled: boolean; groups?: number; tested?: number; switched?: number; shared?: number; error?: string }>('/api/jbox/ai-optimizer/run', { method: 'POST' })
 
 // ---- 延迟历史(server/api/latency-history.mjs):每个节点最近 10 次测速结果,服务端记、所有浏览器共享
 // node:组的样本带当时选中的节点;节点自己的样本没有

@@ -42,6 +42,7 @@ export const DEFAULT_PROFILE = {
   // 按正式路由器实测,按天的记录一天大约 0.75MB,3 个月 ≈ 70MB;小时明细另外只留 7 天
   // (见 system/traffic-collector.mjs)
   traffic: { keepMonths: 3 },
+  aiOptimizer: { enabled: false, policyPriority: 50, asnPriority: false, sensitivityMs: 50, collectTrainingData: false, minSamples: 5, maxSampleAgeHours: 168, latencyWeight: 70, reliabilityWeight: 30, jitterWeight: 20, intervalSeconds: 60 },
   // 测速地址。testUrl 给自动择优(url-test)组和面板的延迟测试用;directTestUrl 只给内置
   // 直连出站用——默认那个是 Google 的域名,从国内直连去测量出来的是"直连到 Google 有多远"。
   // 默认 HTTP，用户可自定义 HTTP / HTTPS 地址(见 engine/test-url.mjs)

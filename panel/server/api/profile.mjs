@@ -70,6 +70,16 @@ export const validateProfilePatch = (patch, { reservedNames = [] } = {}) => {
     if (key in patch && !isHttpUrl(patch[key])) return `${key} must be an http(s) URL`
   }
 
+  if ('aiOptimizer' in patch) {
+    const ai = patch.aiOptimizer
+    if (!isPlainObject(ai)) return 'aiOptimizer must be an object'
+    for (const key of ['enabled', 'asnPriority', 'collectTrainingData']) if (key in ai && !isBoolean(ai[key])) return `aiOptimizer.${key} must be a boolean`
+    const limits = { policyPriority: [0, 100], sensitivityMs: [0, 10_000], minSamples: [1, 10], maxSampleAgeHours: [1, 720], latencyWeight: [0, 100], reliabilityWeight: [0, 100], jitterWeight: [0, 100], intervalSeconds: [15, 3600] }
+    for (const [key, [min, max]] of Object.entries(limits)) {
+      if (key in ai && (!Number.isFinite(ai[key]) || ai[key] < min || ai[key] > max)) return `aiOptimizer.${key} must be between ${min} and ${max}`
+    }
+  }
+
   // 分组用的自定义测速地址:允许留空(表示不用),填了就必须是 http(s)
   if ('customTestUrl' in patch && patch.customTestUrl !== '' && !isHttpUrl(patch.customTestUrl)) {
     return 'customTestUrl must be an http(s) URL'
