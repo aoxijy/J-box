@@ -50,6 +50,7 @@ import {
 import { initSmartWeights } from './smart'
 import { loadLatencyHistory, reportLatencyTimeouts, syncLatencyHistory } from '@/store/latencyHistory'
 import { CUSTOM_TEST_URL_TOKEN } from '@/constant/testUrls'
+import { planLatencyTests } from '@/helper/latency-test-plan'
 
 export const proxiesFilter = ref('')
 export const proxiesTabShow = useStorage<PROXY_TAB_TYPE>(
@@ -803,15 +804,23 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
 
 export const allProxiesLatencyTest = async () => {
   if (independentLatencyTest.value) {
+    // 批量测速按测速 URL 分桶,同一 URL 的策略组共享一轮节点结果。
+    // CHATGPT 的节点单独用它的专用 URL 测,并从其余 URL 的共测池排除,避免重复测速 / 覆盖专用结果。
+    const batches = planLatencyTests(proxyGroupList.value.map((name) => ({
+      name,
+      url: getTestUrl(name),
+      members: proxyMap.value[name]?.all ?? [],
+    }))).filter((batch) => batch.nodes.length > 0)
     const limit = pLimit(3)
-
-    return await Promise.all(
-      proxyGroupList.value.map((proxyGroupName) =>
-        limit(async () => {
-          await proxyGroupLatencyTest(proxyGroupName)
-        }),
+    return Promise.all(batches.map((batch) => limit(() =>
+      testLatencyOneByOneWithTip(
+        batch.groups[0] || 'all',
+        batch.nodes,
+        batch.url,
+        batch.groups.join('、'),
+        `bulk:${batch.url}`,
       ),
-    )
+    )))
   }
 
   const proxyNode = Object.keys(proxyMap.value).filter((proxy) => !isProxyGroup(proxy))
