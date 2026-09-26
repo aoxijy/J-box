@@ -1,6 +1,6 @@
 {
   "region": "CN",
-  "ipv6": true,
+  "ipv6": false,
   "ipv6Proxy": "node",
   "directForNodes": true,
   "tun": {

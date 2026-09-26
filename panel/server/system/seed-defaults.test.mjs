@@ -51,6 +51,7 @@ test('全新安装同时写入默认档案(目标分流);已有 jbox/profile 或
   const names = defaults.routing.policies.map((p) => p.name)
   for (const n of ['AI', '社交聊天', '微软苹果', '国外媒体', '开发平台', '国外', 'Games', '国内', '拦截']) assert.ok(names.includes(n), n)
   assert.equal(defaults.routing.fallbackName, '漏网之鱼')
+  assert.equal(defaults.ipv6, false, 'IPv4-only firmware must ship a profile that cannot add an IPv6 TUN address')
   // 兜底不能是「直连」:没被站点集命中的域名会直连 + 拿上游 DNS 解析,被墙的那些就是污染/打不开
   // (2026-09-14 现场:兜底=直连时 dns.final=dns-direct)。健康检查地址必须是 HTTPS:
   // HTTP 的 gstatic 测不出 TLS / Google 系不通的节点,组会卡在坏节点上(实测真有这种节点)。
