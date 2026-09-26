@@ -7,5 +7,9 @@ export const registerAiOptimizerRoutes = (app, { optimizer } = {}) => {
     const result = await optimizer.tick()
     res.status(result.error ? 503 : 200).json(result)
   })
+  router.post('/ai-optimizer/model/update', async (_req, res) => {
+    const result = await optimizer.updateModel()
+    res.status(result.ok || result.reason === 'insufficient-observed-transitions' ? 200 : 503).json(result)
+  })
   app.use('/api/jbox', router)
 }

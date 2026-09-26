@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 // 延迟历史:每个节点最近 10 次测速结果,面板服务端记、所有浏览器共享。
 //
 // sing-box 的 clash API 每个节点只留最新一次结果,超时还会把这条记录直接删掉。所以这里按
@@ -9,6 +11,8 @@
 export const MAX_SAMPLES = 10
 export const TIMED_OUT = 0
 export const LATENCY_HISTORY_KEY = 'jbox/latency-history'
+export const AI_LATENCY_HISTORY_KEY = 'jbox/ai-latency-history'
+const urlKey = (url) => createHash('sha256').update(String(url)).digest('hex')
 // 同一节点两笔超时靠得太近(不同来源在同一事件上各记了一笔)就当一笔。
 // 组配置了检测间隔时,窗口用组自己的 interval(见 record 的 dedupeMs),这里只是兜底。
 const TIMEOUT_DEDUPE_MS = 60_000
@@ -41,24 +45,45 @@ const leafOf = (proxies, name) => {
 }
 
 export const createLatencyHistory = ({ store, now = () => Date.now() }) => {
-  const read = () => {
-    try {
-      const parsed = JSON.parse(store.getRaw(LATENCY_HISTORY_KEY) || '{}')
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
-    } catch {
-      return {}
+    const readKey = (key) => {
+      try {
+        const parsed = JSON.parse(store.getRaw(key) || '{}')
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+      } catch { return {} }
     }
-  }
-  let cache = read()
-  let dirty = false
-  // 最近一次真正写入的时刻:前端轮询它,变了才拉整份
-  let updatedAt = 0
-  const flush = () => {
-    if (!dirty) return
-    store.setRaw(LATENCY_HISTORY_KEY, JSON.stringify(cache))
-    dirty = false
-    updatedAt = now()
-  }
+    const read = () => readKey(LATENCY_HISTORY_KEY)
+    let cache = read()
+    let aiCache = readKey(AI_LATENCY_HISTORY_KEY)
+    let dirty = false
+    let aiDirty = false
+    // 最近一次真正写入的时刻:前端轮询它,变了才拉整份
+    let updatedAt = 0
+    const flush = () => {
+      if (dirty) {
+        store.setRaw(LATENCY_HISTORY_KEY, JSON.stringify(cache))
+        dirty = false
+      }
+      if (aiDirty) {
+        store.setRaw(AI_LATENCY_HISTORY_KEY, JSON.stringify(aiCache))
+        aiDirty = false
+      }
+      updatedAt = now()
+    }
+
+    // 仅供 AI 训练的历史:节点 + 探测 URL 哈希分桶,最多保留各 10 条。
+    // 与旧的共享历史隔离,不能把不同服务的延迟当成同一个预测目标;原始 URL 不落盘。
+    const recordAiProbe = (name, url, sample) => {
+      if (!name || typeof name !== 'string' || !url || typeof url !== 'string' || !isSample(sample)) return false
+      const key = urlKey(url)
+      const bucket = aiCache[key] || {}
+      const list = bucket[name] || []
+      if (list.some((item) => item.time === sample.time)) return false
+      const next = [...list, { time: sample.time, delay: Math.round(sample.delay) }].sort((a, b) => Date.parse(a.time) - Date.parse(b.time)).slice(-MAX_SAMPLES)
+      aiCache = { ...aiCache, [key]: { ...bucket, [name]: next } }
+      aiDirty = true
+      return true
+    }
+    const getAiForUrl = (url) => (url ? aiCache[urlKey(url)] || {} : {})
 
   // 记一笔。和已存的最后一条时间相同就是同一次结果,不重复;乱序到达的按时间插入。
   // 组的样本多一个 node:那一笔是组当时选中的哪个节点测出来的
@@ -168,5 +193,5 @@ export const createLatencyHistory = ({ store, now = () => Date.now() }) => {
     return removed
   }
 
-  return { record, recordSamples, recordFromProxies, prune, get: () => cache, flush, updatedAt: () => updatedAt }
+  return { record, recordSamples, recordFromProxies, recordAiProbe, getAiForUrl, prune, get: () => cache, flush, updatedAt: () => updatedAt }
 }

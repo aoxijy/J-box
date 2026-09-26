@@ -213,6 +213,11 @@ cp -R "$PANEL_DIR/dist" "$STAGE/panel/dist"
 log "打包面板后端 (pnpm deploy --prod)..."
 (cd "$PANEL_DIR" && corepack pnpm --filter=./server deploy --prod "$STAGE/panel/server")
 
+# 官方 LightGBM 原生运行时作为 app 文件随面板版本更新,不混入 sing-box kernel 组件。
+log "构建官方 LightGBM $ARCH musl 运行时..."
+mkdir -p "$STAGE/panel/server/bin"
+sh "$SCRIPT_DIR/build-lightgbm.sh" "$ARCH" "$STAGE/panel/server/bin/lightgbm"
+
 # 全量 Geo 快照在构建机准备，双架构 CI 使用同一份提交；设备不访问上游。
 GEO_BUNDLE="${JBOX_GEO_BUNDLE_DIR:-$CACHE_DIR/geodata}"
 if [ -z "${JBOX_GEO_BUNDLE_DIR:-}" ]; then

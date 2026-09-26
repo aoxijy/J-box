@@ -20,17 +20,9 @@ export const summarizeNodeHistory = (samples, { now = Date.now(), maxAgeMs = 7 *
   const p90Ms = quantile(successes, 0.9)
   const mean = successes.length ? successes.reduce((a, b) => a + b, 0) / successes.length : null
   const variance = mean === null ? null : successes.reduce((a, b) => a + (b - mean) ** 2, 0) / successes.length
-  return {
-    samples: valid.length,
-    medianMs,
-    p90Ms,
-    failureRate: 1 - successes.length / valid.length,
-    jitterMs: variance === null ? null : Math.sqrt(variance),
-    recentMs: successes.at(-1) ?? null,
-  }
+  return { samples: valid.length, medianMs, p90Ms, failureRate: 1 - successes.length / valid.length, jitterMs: variance === null ? null : Math.sqrt(variance), recentMs: successes.at(-1) ?? null }
 }
 
-// Lower score is better; latency, stability and reliability all come from the shared ten-sample history.
 export const scoreNode = (summary, settings = {}) => {
   if (!summary || !Number.isFinite(summary.medianMs) || summary.failureRate >= 1) return Infinity
   const priority = clamp(Number(settings.policyPriority) || 0, 0, 100) / 100
@@ -47,8 +39,11 @@ export const scoreNode = (summary, settings = {}) => {
 export const selectBestNode = (members, histories, settings, options = {}) => {
   const candidates = (Array.isArray(members) ? members : []).map((name, index) => {
     const summary = summarizeNodeHistory(histories && histories[name], options)
-    return { name, index, summary, score: scoreNode(summary, settings) }
-  }).filter((candidate) => Number.isFinite(candidate.score) && candidate.summary.samples >= Math.min(10, Math.max(1, Number(settings?.minSamples) || 1)))
+    const score = Number.isFinite(options.modelScores?.[name])
+      ? options.modelScores[name] * (1 + clamp(Number(settings?.policyPriority) || 0, 0, 100) / 100)
+      : scoreNode(summary, settings)
+    return { name, index, summary, score, scoring: Number.isFinite(options.modelScores?.[name]) ? 'lightgbm' : 'rules' }
+  }).filter((candidate) => candidate.summary.failureRate < 1 && Number.isFinite(candidate.score) && candidate.summary.samples >= Math.min(10, Math.max(1, Number(settings?.minSamples) || 1)))
     .sort((a, b) => a.score - b.score || a.index - b.index)
   if (!candidates.length) return { selected: '', candidates: [] }
   const incumbent = candidates.find((c) => c.name === options.current)

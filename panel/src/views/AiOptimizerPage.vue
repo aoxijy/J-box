@@ -8,7 +8,7 @@
               <h2 class="text-base font-semibold">{{ $t('aiOptimizerTitle') }}</h2>
               <p class="mt-1 text-xs text-base-content/60">{{ $t('aiOptimizerDescription') }}</p>
             </div>
-            <span class="badge badge-warning badge-sm">{{ $t('aiModelNotReady') }}</span>
+            <span class="badge badge-sm" :class="status.model?.available ? 'badge-success' : 'badge-warning'">{{ status.model?.available ? `LightGBM ${status.model.version}` : $t('aiModelNotReady') }}</span>
           </div>
           <label class="flex items-center justify-between gap-3">
             <span class="text-sm">{{ $t('aiOptimizerEnabled') }}</span>
@@ -69,9 +69,9 @@
             <span class="label-text text-sm">{{ $t('aiProbeInterval') }}</span>
             <input v-model.number="settings.intervalSeconds" type="number" min="15" max="3600" step="15" class="input input-bordered input-sm w-36" @change="save()" />
           </label>
-          <div class="alert alert-info py-2 text-xs">{{ $t('aiTrainingNotReady') }}</div>
-          <button class="btn btn-primary btn-sm self-start" disabled :title="$t('aiModelNotReady')">
-            {{ $t('aiUpdateModel') }}
+          <div class="alert alert-info py-2 text-xs">{{ status.model?.available ? $t('aiModelTrained', { samples: status.model.samples, trainedAt: status.model.trainedAt }) : $t('aiTrainingNotReady') }}</div>
+          <button class="btn btn-primary btn-sm self-start" :disabled="busy || status.training || !settings.collectTrainingData" @click="updateModel">
+            {{ status.training ? $t('aiTrainingInProgress') : $t('aiUpdateModel') }}
           </button>
         </div>
       </section>
@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { deployNow, fetchAiOptimizerStatus, fetchProfile, runAiOptimizerNow, saveProfile, type JBoxProfile } from '@/api/jbox'
+import { deployNow, fetchAiOptimizerStatus, fetchProfile, runAiOptimizerNow, updateAiOptimizerModel, saveProfile, type JBoxProfile, type JBoxAiOptimizerStatus } from '@/api/jbox'
 import { AI_OPTIMIZER_DEFAULTS, normalizeAiOptimizerSettings } from '@/helper/ai-optimizer-settings.mjs'
 import { usePaddingForViews } from '@/composables/paddingViews'
 import { showNotification } from '@/helper/notification'
@@ -107,8 +107,8 @@ import { onMounted, reactive, ref, computed } from 'vue'
 const { padding } = usePaddingForViews({ offsetTop: 0, offsetBottom: 0 })
 const busy = ref(false)
 const settings = reactive({ ...AI_OPTIMIZER_DEFAULTS })
-const status = reactive({ enabled: false, groups: [] as { tag: string; url: string; members: number; selected: string }[], lastRunAt: 0, lastError: '', tested: 0, selected: 0 })
-const statusText = computed(() => status.enabled ? `${status.groups.length} groups · ${status.selected}/${status.tested} selected` : 'AI takeover disabled')
+const status = reactive<JBoxAiOptimizerStatus>({ enabled: false, groups: [], lastRunAt: 0, lastError: '', tested: 0, switched: 0, shared: 0, training: false, model: { available: false, version: '', trainedAt: '', samples: 0, error: '' } })
+const statusText = computed(() => status.enabled ? `${status.groups.length} groups · ${status.switched}/${status.tested} selected` : 'AI takeover disabled')
 
 const refreshStatus = async () => {
   try { Object.assign(status, await fetchAiOptimizerStatus()) } catch { /* status refresh is best-effort */ }
@@ -145,6 +145,22 @@ const save = async (applyRuntime = false) => {
 }
 
 const apply = () => save(true)
+const updateModel = async () => {
+  if (busy.value || !settings.collectTrainingData) return
+  busy.value = true
+  try {
+    const result = await updateAiOptimizerModel()
+    await refreshStatus()
+    showNotification({
+      content: result.ok ? 'aiModelUpdated' : 'aiModelInsufficientData',
+      params: { samples: String(result.samples ?? 0), required: '32' },
+      type: result.ok ? 'alert-success' : 'alert-warning',
+    })
+  } catch (error) {
+    showNotification({ content: 'routeTestRequestFailed', params: { message: error instanceof Error ? error.message : String(error) }, type: 'alert-error' })
+  } finally { busy.value = false }
+}
+
 const runNow = async () => {
   if (busy.value) return
   busy.value = true

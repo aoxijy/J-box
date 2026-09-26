@@ -28,6 +28,22 @@ test('记一笔:同一时间不重复、乱序按时间排、最多 10 条,落�
   assert.equal(h.record('A', { time: at(30), delay: -1 }), false)
 })
 
+test('AI 探测历史按 URL 隔离，并与共享测速历史分开保存', () => {
+  const store = memStore()
+  const h = createLatencyHistory({ store })
+  assert.equal(typeof h.recordAiProbe, 'function')
+  assert.equal(typeof h.getAiForUrl, 'function')
+  h.record('A', { time: at(0), delay: 999 })
+  assert.equal(h.recordAiProbe('A', 'https://one.invalid/ping', { time: at(1), delay: 100 }), true)
+  assert.equal(h.recordAiProbe('A', 'https://two.invalid/ping', { time: at(2), delay: 200 }), true)
+  assert.equal(h.getAiForUrl('https://one.invalid/ping').A[0].delay, 100)
+  assert.equal(h.getAiForUrl('https://two.invalid/ping').A[0].delay, 200)
+  assert.equal(h.getAiForUrl('https://legacy.invalid/ping').A, undefined)
+  h.flush()
+  const saved = JSON.parse(store.raw.get('jbox/ai-latency-history'))
+  assert.equal(JSON.stringify(saved).includes('one.invalid'), false)
+})
+
 test('从 /proxies 记:最新一条变了就记;有结果→没结果 = 内核测速超时,记 0;组按当时选中的节点记', () => {
   const h = createLatencyHistory({ store: memStore() })
   h.recordFromProxies({ A: node([{ time: at(0), delay: 120 }]), B: node([{ time: at(0), delay: 80 }]), G: { all: ['A', 'B'], now: 'A', history: [] } }, { kernelStartedAt: T0 - 3_600_000, at: T0 })
