@@ -47,7 +47,7 @@ test('runs AI separately inside each group and shares one probe for overlapping 
   ] }
   const optimizer = createAiOptimizer({
     store, ctx: { readFile: async () => JSON.stringify(meta) }, paths: { etc: '/etc/jbox' },
-    history: { record: () => {}, flush: () => {}, get: () => records },
+    history: { record: () => {}, recordAiProbe: () => {}, getAiForUrl: () => records, flush: () => {}, get: () => records },
     coordinator: { probe: async (node, url) => { probes.push(`${node}|${url}`); return { at: Date.now(), delay: records[node][0].delay, ok: true } } },
     fetchImpl: async (url, init = {}) => {
       if (url.endsWith('/proxies')) return { ok: true, json: async () => ({ proxies: Object.fromEntries([...selections].map(([tag, now]) => [tag, { now, all: meta.aiGroups.find((g) => g.tag === tag).members }])) }) }

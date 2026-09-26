@@ -153,7 +153,7 @@ const updateModel = async () => {
     await refreshStatus()
     showNotification({
       content: result.ok ? 'aiModelUpdated' : 'aiModelInsufficientData',
-      params: { samples: String(result.samples ?? 0), required: '32' },
+      params: { samples: String(result.samples ?? 0), required: String(result.required ?? 32) },
       type: result.ok ? 'alert-success' : 'alert-warning',
     })
   } catch (error) {

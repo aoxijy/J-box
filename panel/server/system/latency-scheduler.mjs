@@ -152,7 +152,11 @@ export const createLatencyScheduler = ({
       for (const it of interests) {
         const r = await coordinator.probe(it.node, it.url, { intervalMs: it.intervalMs, timeoutMs: testTimeoutMs, force: false })
         if (r && !r.cached) probed.push(it.node)
+        if ((store.getProfile?.() || {}).aiOptimizer?.collectTrainingData === true && typeof history.recordAiProbe === 'function' && (r?.ok === true || r?.ok === false) && Number.isFinite(r.at) && Number.isFinite(r.delay)) {
+          history.recordAiProbe(it.node, it.url, { time: new Date(r.at).toISOString(), delay: r.ok ? r.delay : 0 })
+        }
       }
+      history.flush?.()
     }
     // 测完重读一次:新结果立刻进历史(节点按自己最短的窗口去重,组按自己的间隔去重)
     try { proxies = await fetchProxies() } catch { return { tested: probed, timeouts: [] } }

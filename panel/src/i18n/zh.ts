@@ -1270,7 +1270,7 @@ const zh: LANG_MESSAGE = {
   aiAsnPriority: 'ASN 优先',
   aiAsnUnavailable: 'ASN 查询数据源尚未接入，此项暂不生效。',
   aiTrainingTitle: '评分与测速策略',
-  aiTrainingDescription: '已保存的最近十次节点延迟会用于评分；同一节点同一测速 URL 共测一次并共享结果。',
+  aiTrainingDescription: '本机模型按测速 URL 隔离使用每节点最近十次探测，并学习失败率、延迟波动和路由器本地 20:00–22:59 高峰时段。带宽、远端节点负载、IP 风险/黑名单、ASN/地址类型及流媒体解锁目前没有可验证的本地数据源，不会作为模型输入。',
   aiCollectTraining: '为后续模型收集训练数据',
   aiMinSamples: '最少有效样本数（1–10）',
   aiTrainingNotReady: '开启训练数据收集后，可用本机最近十次测速记录训练；至少需要 32 条历史转移样本，样本不足时继续使用规则评分。',

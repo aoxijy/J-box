@@ -1270,7 +1270,7 @@ const zhTW: LANG_MESSAGE = {
   aiAsnPriority: 'ASN 優先',
   aiAsnUnavailable: 'ASN 查詢資料來源尚未接入，此項暫不生效。',
   aiTrainingTitle: '評分與測速策略',
-  aiTrainingDescription: '已儲存的最近十次節點延遲會用於評分；相同節點和測速 URL 共測一次並共享結果。',
+  aiTrainingDescription: '本機模型依測速 URL 隔離使用每個節點最近十次探測，並學習失敗率、延遲波動及路由器本地時間 20:00–22:59 的尖峰時段。頻寬、遠端節點負載、IP 風險/黑名單、ASN/地址類型及串流解鎖目前沒有可驗證的本機資料來源，不會作為模型輸入。',
   aiCollectTraining: '為後續模型收集訓練資料',
   aiMinSamples: '最少有效樣本數（1–10）',
   aiTrainingNotReady: '啟用訓練資料收集後，會使用本機最近十次測速記錄訓練；至少需要 32 筆歷史轉移樣本，不足時繼續使用規則評分。',

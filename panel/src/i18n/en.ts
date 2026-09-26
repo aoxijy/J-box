@@ -1274,7 +1274,7 @@ const en = {
   aiAsnPriority: 'Prefer ASN',
   aiAsnUnavailable: 'ASN lookup data source is not integrated yet; this option currently has no effect.',
   aiTrainingTitle: 'Scoring and probe policy',
-  aiTrainingDescription: 'The latest ten saved latency samples are scored; identical node + test URL probes run once and share results.',
+  aiTrainingDescription: 'The local model uses per-test-URL probe history (up to ten samples per node), failure rate, latency spread, and local 20:00–22:59 peak-hour features. Bandwidth, remote node load, IP risk/blacklists, ASN/type, and streaming unlock are not available as verified local data and are not model inputs.',
   aiCollectTraining: 'Collect data for future model training',
   aiMinSamples: 'Minimum valid samples (1–10)',
   aiTrainingNotReady: 'Enable local training-data collection to train from the latest ten saved probe results. At least 32 observed transitions are required; rule scoring remains active until then.',

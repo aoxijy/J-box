@@ -11,16 +11,21 @@ const deviation = (values) => {
   return Math.sqrt(values.reduce((sum, n) => sum + (n - mean) ** 2, 0) / values.length)
 }
 
-export const FEATURE_COUNT = 9
+export const FEATURE_COUNT = 12
 export const LIGHTGBM_VERSION = '4.7.0'
 export const LIGHTGBM_MODEL_FORMAT = 'v4'
 
 export function featureVector(samples, { now = Date.now(), maxAgeMs = 7 * 86_400_000 } = {}) {
-  const valid = (Array.isArray(samples) ? samples : []).filter((s) => s && Number.isFinite(Date.parse(s.time)) && Number.isFinite(s.delay) && s.delay >= 0 && now - Date.parse(s.time) <= maxAgeMs).slice(-10)
+  const valid = (Array.isArray(samples) ? samples : [])
+    .filter((s) => s && Number.isFinite(Date.parse(s.time)) && Number.isFinite(s.delay) && s.delay >= 0 && now - Date.parse(s.time) >= 0 && now - Date.parse(s.time) <= maxAgeMs)
+    .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
+    .slice(-10)
   const successful = valid.map((s) => s.delay).filter((d) => d > 0)
   const firstAt = valid.length ? Date.parse(valid[0].time) : 0
   const lastAt = valid.length ? Date.parse(valid.at(-1).time) : 0
-  return [valid.length, successful.length, valid.length ? 1 - successful.length / valid.length : 1, percentile(successful, 0.5), percentile(successful, 0.9), successful.length ? successful.reduce((a, b) => a + b, 0) / successful.length : 0, deviation(successful), successful.at(-1) || 0, Math.max(0, lastAt - firstAt) / 1000]
+  const hour = valid.length ? new Date(now).getHours() : 0
+  const hourAngle = hour / 24 * Math.PI * 2
+  return [valid.length, successful.length, valid.length ? 1 - successful.length / valid.length : 1, percentile(successful, 0.5), percentile(successful, 0.9), successful.length ? successful.reduce((a, b) => a + b, 0) / successful.length : 0, deviation(successful), valid.at(-1)?.delay || 0, Math.max(0, lastAt - firstAt) / 1000, Math.sin(hourAngle), Math.cos(hourAngle), hour >= 20 && hour < 23 ? 1 : 0]
 }
 
 // Every row predicts the next observed probe result using only preceding results for that node.
@@ -28,7 +33,7 @@ export function featureVector(samples, { now = Date.now(), maxAgeMs = 7 * 86_400
 export function makeTrainingRows(histories, { maxAgeMs = 7 * 86_400_000, now = Date.now(), minSamplesPerNode = 6 } = {}) {
   const rows = []
   for (const samples of Object.values(histories || {})) {
-    const ordered = (Array.isArray(samples) ? samples : []).filter((s) => s && Number.isFinite(Date.parse(s.time)) && Number.isFinite(s.delay) && s.delay >= 0 && now - Date.parse(s.time) <= maxAgeMs).sort((a, b) => Date.parse(a.time) - Date.parse(b.time)).slice(-10)
+    const ordered = (Array.isArray(samples) ? samples : []).filter((s) => s && Number.isFinite(Date.parse(s.time)) && Number.isFinite(s.delay) && s.delay >= 0 && now - Date.parse(s.time) >= 0 && now - Date.parse(s.time) <= maxAgeMs).sort((a, b) => Date.parse(a.time) - Date.parse(b.time)).slice(-10)
     if (ordered.length < minSamplesPerNode) continue
     for (let i = 4; i < ordered.length - 1; i++) rows.push({ features: featureVector(ordered.slice(0, i + 1), { now: Date.parse(ordered[i].time), maxAgeMs }), label: ordered[i + 1].delay })
   }
@@ -66,7 +71,7 @@ export async function trainOnlineModel(histories, { ctx, paths, minRows = 32, ma
       `num_iterations=${Math.max(8, Math.min(128, Math.trunc(numIterations) || 32))}`,
       'learning_rate=0.05', 'num_leaves=7', 'max_depth=3', 'min_data_in_leaf=3', 'min_data_in_bin=1',
       'feature_fraction=1.0', 'bagging_fraction=1.0', 'verbosity=-1', 'num_threads=1', 'metric=l2',
-      `model_output=${modelPath}`,
+      `output_model=${modelPath}`,
     ], 120_000)
     const model = await ctx.readFile(modelPath)
     if (!model.includes(`version=${LIGHTGBM_MODEL_FORMAT}\n`) || !model.includes(`max_feature_idx=${FEATURE_COUNT - 1}\n`) || model.length < 128) throw new Error('LightGBM 输出模型格式/特征数校验失败')

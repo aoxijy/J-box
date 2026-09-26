@@ -130,6 +130,18 @@ test('内核没在跑 → 这个 tick 什么都不做', async () => {
   assert.deepEqual(await s.tick(), { skipped: 'kernel' })
 })
 
+test('AI opt-in collects per-node, per-URL shared probe history', async () => {
+  const clock = T0
+  const k = kernel(proxiesFixture(), () => clock)
+  const store = memStore()
+  store.getProfile = () => ({ aiOptimizer: { collectTrainingData: true } })
+  const history = createLatencyHistory({ store, now: () => clock })
+  const s = createLatencyScheduler({ store, ctx: ctxWithKernel(), paths, history, coordinator: createProbeCoordinator({ store, fetchImpl: k.fetchImpl, now: () => clock }), fetchImpl: k.fetchImpl, now: () => clock, log: () => {} })
+  await s.tick()
+  assert.deepEqual(history.getAiForUrl('https://t/204').a.map((sample) => sample.delay), [90])
+  assert.deepEqual(history.getAiForUrl('https://t/204').b.map((sample) => sample.delay), [120])
+})
+
 test('sync:只读 /proxies,不发起任何测速', async () => {
   const clock = T0
   const k = kernel(proxiesFixture(), () => clock)
