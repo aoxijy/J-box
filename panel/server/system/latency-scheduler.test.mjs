@@ -138,8 +138,12 @@ test('AI opt-in collects per-node, per-URL shared probe history', async () => {
   const history = createLatencyHistory({ store, now: () => clock })
   const s = createLatencyScheduler({ store, ctx: ctxWithKernel(), paths, history, coordinator: createProbeCoordinator({ store, fetchImpl: k.fetchImpl, now: () => clock }), fetchImpl: k.fetchImpl, now: () => clock, log: () => {} })
   await s.tick()
-  assert.deepEqual(history.getAiForUrl('https://t/204').a.map((sample) => sample.delay), [90])
-  assert.deepEqual(history.getAiForUrl('https://t/204').b.map((sample) => sample.delay), [120])
+  assert.deepEqual(history.getAiForUrl('https://t/204').a.map((sample) => sample.delay), [99])
+  assert.deepEqual(history.getAiForUrl('https://t/204').b.map((sample) => sample.delay), [99])
+  const probeCalls = k.calls.filter((url) => url.includes('/delay?'))
+  assert.equal(probeCalls.length, 2, 'must disregard untagged kernel history on the first URL-scoped sample')
+  await s.tick()
+  assert.equal(k.calls.filter((url) => url.includes('/delay?')).length, 2, 'fresh URL-scoped history is reused')
 })
 
 test('sync:只读 /proxies,不发起任何测速', async () => {

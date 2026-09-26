@@ -150,9 +150,18 @@ export const createLatencyScheduler = ({
     const probed = []
     if (coordinator) {
       for (const it of interests) {
+        const collectForAi = (store.getProfile?.() || {}).aiOptimizer?.collectTrainingData === true && typeof history.recordAiProbe === 'function'
+        if (collectForAi) {
+          const samples = history.getAiForUrl?.(it.url)?.[it.node] || []
+          const latestAt = samples.reduce((latest, sample) => Math.max(latest, Date.parse(sample?.time) || 0), 0)
+          const age = now() - latestAt
+          if (latestAt > 0 && age >= 0 && age < it.intervalMs) continue
+          // Kernel proxy history has no URL provenance; discard its seeded cache before collecting AI data.
+          coordinator.clear?.(it.node, it.url)
+        }
         const r = await coordinator.probe(it.node, it.url, { intervalMs: it.intervalMs, timeoutMs: testTimeoutMs, force: false })
         if (r && !r.cached) probed.push(it.node)
-        if ((store.getProfile?.() || {}).aiOptimizer?.collectTrainingData === true && typeof history.recordAiProbe === 'function' && (r?.ok === true || r?.ok === false) && Number.isFinite(r.at) && Number.isFinite(r.delay)) {
+        if (collectForAi && (r?.ok === true || r?.ok === false) && Number.isFinite(r.at) && Number.isFinite(r.delay)) {
           history.recordAiProbe(it.node, it.url, { time: new Date(r.at).toISOString(), delay: r.ok ? r.delay : 0 })
         }
       }

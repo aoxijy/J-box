@@ -139,9 +139,17 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
         for (const node of group.members) unique.set(`${node}\u0000${group.url}`, { node, url: group.url, intervalMs: group.intervalMs })
       }
       let tested = 0
+      const intervalSeconds = Math.max(1, Number(profile.aiOptimizer.intervalSeconds) || 60)
       for (const item of unique.values()) {
+        const intervalMs = Math.min(item.intervalMs || tickMs, intervalSeconds * 1000)
+        const previous = history.getAiForUrl?.(item.url)?.[item.node] || []
+        const latestAt = previous.reduce((latest, sample) => Math.max(latest, Date.parse(sample?.time) || 0), 0)
+        const age = now() - latestAt
+        if (latestAt > 0 && age >= 0 && age < intervalMs) continue
+        // Kernel proxy history is not URL-tagged; never treat it as an AI sample for this URL.
+        coordinator.clear?.(item.node, item.url)
         const result = await coordinator.probe(item.node, item.url, {
-          intervalMs: Math.min(item.intervalMs || tickMs, (Number(profile.aiOptimizer.intervalSeconds) || 60) * 1000),
+          intervalMs,
           timeoutMs: Math.min(15_000, Math.max(5_000, item.intervalMs || 5_000)),
           force: false,
         })

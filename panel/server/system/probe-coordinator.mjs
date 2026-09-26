@@ -135,9 +135,10 @@ export const createProbeCoordinator = ({
     entries.set(keyOf(node, url), { at, ok: result.ok ?? null, delay: result.delay ?? 0, reason: result.reason || 'noted' })
   }
 
+  const clear = (node, url) => entries.delete(keyOf(node, url))
   const stats = () => ({ size: entries.size, inflight: inflight.size, hits, misses })
 
   // 手动测速(面板"测速"按钮、订阅页一键测速)不走这里:那条路有自己的强制语义,
   // 见 api/node-latency.mjs 与 api/penetration.mjs 的控制器转发。
-  return { probe, seedFromProxies, noteProbed, stats, _entries: entries }
+  return { probe, seedFromProxies, noteProbed, clear, stats, _entries: entries }
 }

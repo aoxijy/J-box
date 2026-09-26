@@ -32,7 +32,7 @@ test('ignores unmeasured/fully failing candidates and sensitivity prevents tiny 
 })
 
 test('runs AI separately inside each group and shares one probe for overlapping node/URL members', async () => {
-  const timestamp = new Date(Date.now()).toISOString()
+  const timestamp = new Date(Date.now() - 120_000).toISOString()
   const records = Object.fromEntries([['A', 60], ['B', 40], ['C', 20]].map(([tag, delay]) => [tag, Array(5).fill({ time: timestamp, delay })]))
   const selections = new Map([['Asia', 'A'], ['ChatGPT', 'B']])
   const probes = []
