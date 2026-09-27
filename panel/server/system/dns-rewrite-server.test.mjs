@@ -113,7 +113,7 @@ test('报文编解码:问题段解析、OPT 的 UDP 上限、IPv6 压缩写法�
 
 // 真起一个 UDP 服务,用 node:dns 的 Resolver 当客户端端到端查一遍(和 sing-box 发过来的形态一样)
 test('UDP 服务端到端:A / AAAA / CNAME 查询都能回到可用的记录;规则从档案实时读', async () => {
-  let profile = { ipv6: true, dns: { rewrite: { initialized: 1, rules: [
+  let profile = { ipv6: true, dns: { rewrite: { enabled: true, initialized: 1, rules: [
     { id: 'g', source: 'services.googleapis.cn', domain: 'services.googleapis.com' },
     { id: 'w', source: '*.ok1248.cn', addresses: ['192.168.3.1', '2001:db8::1'] },
   ] } } }
@@ -133,7 +133,7 @@ test('UDP 服务端到端:A / AAAA / CNAME 查询都能回到可用的记录;规
     assert.deepEqual(await resolver.resolve4('deep.a.ok1248.cn'), ['192.168.3.1'])
     assert.deepEqual(await resolver.resolve6('deep.a.ok1248.cn'), ['2001:db8::1'])
     // 规则改了(停用泛域名),两秒缓存过后生效:没命中就按直连上游,这里没有上游 → SERVFAIL
-    profile = { ...profile, dns: { rewrite: { initialized: 1, rules: [profile.dns.rewrite.rules[0]] } } }
+    profile = { ...profile, dns: { rewrite: { enabled: true, initialized: 1, rules: [profile.dns.rewrite.rules[0]] } } }
     clock += 5000
     await assert.rejects(resolver.resolve4('deep.a.ok1248.cn'), (err) => err.code === 'ESERVFAIL')
   } finally {
@@ -153,7 +153,7 @@ const rawQuery = (name, type, udpSize = 4096) => {
   return Buffer.concat([h, ...parts, Buffer.from([0]), tail, opt])
 }
 test('大应答:UDP 按声明的上限截断并置 TC;同端口 TCP 给全部 16 条;Resolver 经 TC 重试后拿全', async () => {
-  const profile = { ipv6: true, dns: { rewrite: { initialized: 1, rules: [{ id: 'large', source: LONG_NAME, addresses: SIXTEEN_V6 }] } } }
+  const profile = { ipv6: true, dns: { rewrite: { enabled: true, initialized: 1, rules: [{ id: 'large', source: LONG_NAME, addresses: SIXTEEN_V6 }] } } }
   const server = createDnsRewriteServer({ store: { getProfile: () => profile }, port: 0, resolveKernel: kernel, log: () => {} })
   await server.start()
   const port = server.address().port
@@ -220,7 +220,7 @@ test('代理 v6 降为 IPv4:走代理的源域名 AAAA 回空、直连的照给;
   assert.deepEqual(off.answers, [])
   // 整个服务:档案 ipv6Proxy=ipv4 + sourceViaProxy 注入,按域名缓存判定
   let asked = 0
-  const profile = { ipv6: true, ipv6Proxy: 'ipv4', dns: { rewrite: { initialized: 1, rules } } }
+  const profile = { ipv6: true, ipv6Proxy: 'ipv4', dns: { rewrite: { enabled: true, initialized: 1, rules } } }
   const server = createDnsRewriteServer({ store: { getProfile: () => profile }, port: 0, resolveKernel: kernel, sourceViaProxy: async (n) => { asked += 1; return n.startsWith('proxy-') }, log: () => {} })
   await server.start()
   try {

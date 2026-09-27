@@ -19,6 +19,12 @@ test('normalizeDomain:小写、去末尾点、泛域名保留 *.;非法字符 / 
   assert.equal(normalizeDomain(''), '')
 })
 
+test('missing DNS rewrite enabled flag defaults off while explicit opt-in stays enabled', () => {
+  assert.equal(normalizeDnsRewrite({ rewrite: { rules: [{ source: 'a.example', domain: 'b.example' }] } }).enabled, false)
+  assert.equal(normalizeDnsRewrite({ rewrite: { enabled: true, rules: [] } }).enabled, true)
+  assert.equal(normalizeDnsRewrite({ rewrite: { enabled: false, rules: [] } }).enabled, false)
+})
+
 test('validateDnsRewrite:源 / 目标 / 地址 / 重复 / 二选一 都要拦;合法定义通过', () => {
   const ok = { rules: [
     { source: 'services.googleapis.cn', domain: 'services.googleapis.com' },
@@ -75,7 +81,7 @@ test('生成:内核规则精确进 domain、泛域名进 domain_suffix(带前导
 test('buildDns:重写规则排在所有 DNS 规则最前面,服务器在列表里;没有规则时什么都不加', () => {
   const profile = {
     ipv6: true,
-    dns: { split: true, mode: 'dnsmasq', direct: '223.5.5.5', proxy: '1.1.1.1', rewrite: { initialized: 1, rules: [{ source: 'services.googleapis.cn', domain: 'services.googleapis.com' }] } },
+    dns: { split: true, mode: 'dnsmasq', direct: '223.5.5.5', proxy: '1.1.1.1', rewrite: { enabled: true, initialized: 1, rules: [{ source: 'services.googleapis.cn', domain: 'services.googleapis.com' }] } },
     routing: { proxyTag: 'PROXY', policies: [], fallbackDefault: 'proxy' },
   }
   const dns = buildDns(profile, { systemDns: ['192.168.1.1'] })

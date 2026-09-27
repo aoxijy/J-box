@@ -90,6 +90,15 @@ test('getProfile 无值返回默认', () => {
 test('IPv6 默认关闭:不解析也不访问 v6,除非用户自己打开', () => {
   const { store } = memStore()
   assert.equal(store.getProfile().ipv6, false)
+  assert.equal(store.getProfile().dns.rewrite.enabled, false)
+})
+
+test('旧档案缺少 DNS 重写 enabled 时默认关闭,明确开启的值保留', () => {
+  const { store } = memStore()
+  store.setProfile({ dns: { rewrite: { initialized: 1, rules: [] } } })
+  assert.equal(store.getProfile().dns.rewrite.enabled, false)
+  store.setProfile({ dns: { rewrite: { enabled: true } } })
+  assert.equal(store.getProfile().dns.rewrite.enabled, true)
 })
 
 test('setProfile 深合并,不丢未提及字段', () => {

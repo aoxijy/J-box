@@ -797,7 +797,7 @@ const zh: LANG_MESSAGE = {
   dnsModeUpstreamHint: '内核 DNS 地址 {addr},三种模式都可用;AdGuard Home / Pi-hole 把上游指向它即可。切换模式后清一次 DNS 缓存。',
   dnsModeSaved: 'DNS 劫持方式已保存,重启内核后生效。',
   dnsRewriteTitle: 'DNS 重写',
-  dnsRewriteDescription: '把某个域名的解析结果改成另一个域名或固定 IP;默认带两条 Google 的重写（解决 Google Play 无法下载 App 问题）。',
+  dnsRewriteDescription: '本地 DNS 重写规则的总开关默认为关闭。',
   dnsRewriteNote: '目标或地址保存后服务端立即更新,已有的解析结果要等 DNS 缓存过期;新增、修改源域名、启用或停用规则后请重启内核,入口规则和转发名单才会同步。泛域名 *.example.com 只匹配子域,不含 example.com 本身。',
   dnsRewriteEmpty: '没有重写规则。',
   dnsRewriteAdd: '添加',

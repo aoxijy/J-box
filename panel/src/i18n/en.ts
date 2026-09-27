@@ -801,7 +801,7 @@ const en = {
   dnsModeUpstreamHint: 'Kernel DNS address {addr}, available in every mode; point AdGuard Home / Pi-hole upstream at it. Flush DNS caches after switching modes.',
   dnsModeSaved: 'DNS hijack mode saved; restart the kernel to apply.',
   dnsRewriteTitle: 'DNS rewrites',
-  dnsRewriteDescription: 'Answer a domain with another domain or fixed IPs; two Google rewrites are included by default to fix Google Play app download problems.',
+  dnsRewriteDescription: 'The DNS rewrite master switch is off by default.',
   dnsRewriteNote: 'Target / address changes reach the panel service at once, but existing answers stay until DNS caches expire; after adding, editing a source domain, enabling or disabling a rule, restart the kernel so its rules and the forwarding list follow. *.example.com matches subdomains only, not example.com itself.',
   dnsRewriteEmpty: 'No rewrite rules.',
   dnsRewriteAdd: 'Add',

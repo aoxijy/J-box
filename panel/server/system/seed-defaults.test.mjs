@@ -48,6 +48,7 @@ test('全新安装同时写入默认档案(目标分流);已有 jbox/profile 或
   const { loadProfileDefaults, PROFILE_KEY } = await import('./seed-defaults.mjs')
   const defaults = loadProfileDefaults()
   assert.ok(defaults && defaults.routing && defaults.routing.policies.length >= 5, '随包的 profile-defaults.json 要有一套站点集')
+  assert.equal(defaults.dns?.rewrite?.enabled, false, '新装的 DNS 重写总开关必须默认关闭')
   const names = defaults.routing.policies.map((p) => p.name)
   for (const n of ['AI', '社交聊天', '微软苹果', '国外媒体', '开发平台', '国外', 'Games', '国内', '拦截']) assert.ok(names.includes(n), n)
   assert.equal(defaults.routing.fallbackName, '漏网之鱼')

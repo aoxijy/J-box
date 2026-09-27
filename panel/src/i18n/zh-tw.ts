@@ -797,7 +797,7 @@ const zhTW: LANG_MESSAGE = {
   dnsModeUpstreamHint: '核心 DNS 位址 {addr},三種模式都可用;AdGuard Home / Pi-hole 把上游指向它即可。切換模式後清一次 DNS 快取。',
   dnsModeSaved: 'DNS 劫持方式已儲存,重啟核心後生效。',
   dnsRewriteTitle: 'DNS 重寫',
-  dnsRewriteDescription: '把某個網域的解析結果改成另一個網域或固定 IP;預設帶兩條 Google 的重寫（解決 Google Play 無法下載 App 問題）。',
+  dnsRewriteDescription: '把某個網域的解析結果改成另一個網域或固定 IP;預設總開關關閉,提供兩條 Google 重寫範本。',
   dnsRewriteNote: '目標或位址儲存後伺服端立即更新,已有的解析結果要等 DNS 快取過期;新增、修改來源網域、啟用或停用規則後請重啟核心,入口規則和轉發名單才會同步。泛網域 *.example.com 只匹配子網域,不含 example.com 本身。',
   dnsRewriteEmpty: '沒有重寫規則。',
   dnsRewriteAdd: '新增',

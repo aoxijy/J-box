@@ -57,7 +57,7 @@ test('部署按启用的 DNS 重写源生成 dnsmasq 例外:固定 IPv4 / IPv6�
   const ctx = okCtx()
   const r = await deployConfig(ctx, paths, {
     config,
-    profile: { ...profile, dns: { mode: 'dnsmasq', rewrite: { rules: [
+    profile: { ...profile, dns: { mode: 'dnsmasq', rewrite: { enabled: true, rules: [
       { source: '*.custom.example', addresses: ['192.168.77.1'] },
       { source: 'v6.custom.example', addresses: ['fd12::1'] },
       { source: 'alias.example', domain: 'target.custom.example' },

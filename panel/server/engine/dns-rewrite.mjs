@@ -13,8 +13,7 @@
 // 生成答案,域名型目标再回头问内核 :7853(目标域名走现有的分流 DNS 策略)。dnsmasq 转发模式下这些源域名
 // 也进转发名单,不然在原上游就被正常解析了。
 //
-// 默认带两条 Google 的重写(services.googleapis.cn / developers.google.cn → .com):按普通条目存,稳定 id,
-// 用户改了 / 停了 / 删了都算数;只在「重写配置还没初始化」的档案上补一次,以后不再自动回填(见
+// 默认带两条 Google 重写规则,但总开关默认关闭。仅当「规则列表还没初始化」时补一次;用户改 / 停 / 删后不自动回填。
 // ensureDnsRewriteDefaults)。
 import net from 'node:net'
 import { dnsmasqSafeDomain } from './dns-names.mjs'
@@ -76,7 +75,7 @@ export const normalizeRule = (raw, index = 0) => {
 export const normalizeDnsRewrite = (dns) => {
   const rw = dns && typeof dns === 'object' && dns.rewrite && typeof dns.rewrite === 'object' ? dns.rewrite : null
   const rules = (Array.isArray(rw?.rules) ? rw.rules : []).map(normalizeRule).filter((r) => r.source && (r.domain || r.addresses.length))
-  return { enabled: rw?.enabled !== false, initialized: Boolean(rw && rw.initialized), rules }
+  return { enabled: rw?.enabled === true, initialized: Boolean(rw && rw.initialized), rules }
 }
 
 // 写入前校验(api/profile.mjs):形状、每条的源 / 目标、重复源;不合法的不静默丢掉
