@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { configMetaPath } from './deploy.mjs'
 import { CLASH_API_BASE } from '../api/penetration.mjs'
-import { scoreNode, summarizeNodeHistory, selectBestNode } from './ai-optimizer.mjs'
+import { scoreNode, summarizeNodeHistory, selectReachableNode } from './ai-optimizer.mjs'
 import { featureVector, predictWithLightGbm, trainOnlineModel, LIGHTGBM_VERSION, LIGHTGBM_MODEL_FORMAT, FEATURE_COUNT } from './lightgbm-runtime.mjs'
 
 const withTimeout = async (fetchImpl, url, init, ms) => {
@@ -136,29 +136,11 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
         const runtime = proxies[group.tag]
         if (!runtime || !Array.isArray(runtime.all)) continue
         selections[group.tag] = runtime.now || selections[group.tag] || ''
-        for (const node of group.members) unique.set(`${node}\u0000${group.url}`, { node, url: group.url, intervalMs: group.intervalMs })
+        for (const node of group.members) unique.set(JSON.stringify([node, group.url]), { node, url: group.url, intervalMs: group.intervalMs })
       }
       let tested = 0
-      const intervalSeconds = Math.max(1, Number(profile.aiOptimizer.intervalSeconds) || 60)
-      for (const item of unique.values()) {
-        const intervalMs = Math.min(item.intervalMs || tickMs, intervalSeconds * 1000)
-        const previous = history.getAiForUrl?.(item.url)?.[item.node] || []
-        const latestAt = previous.reduce((latest, sample) => Math.max(latest, Date.parse(sample?.time) || 0), 0)
-        const age = now() - latestAt
-        if (latestAt > 0 && age >= 0 && age < intervalMs) continue
-        // Kernel proxy history is not URL-tagged; never treat it as an AI sample for this URL.
-        coordinator.clear?.(item.node, item.url)
-        const result = await coordinator.probe(item.node, item.url, {
-          intervalMs,
-          timeoutMs: Math.min(15_000, Math.max(5_000, item.intervalMs || 5_000)),
-          force: false,
-        })
-        if (!result?.cached) tested++
-        if (typeof history.recordAiProbe === 'function' && (result?.ok === true || result?.ok === false) && Number.isFinite(result.at) && Number.isFinite(result.delay)) {
-          history.recordAiProbe(item.node, item.url, { time: new Date(result.at).toISOString(), delay: result.ok ? result.delay : 0 })
-        }
-      }
-      history.flush()
+      let shared = 0
+      const verifiedProbes = new Map()
       const selected = []
       let switched = 0
       for (const group of groups) {
@@ -176,16 +158,36 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
             modelStatus = { ...modelStatus, error: error instanceof Error ? error.message : String(error) }
           }
         }
-        const decision = selectBestNode(group.members, groupHistories, profile.aiOptimizer, decisionOptions)
-        if (!decision.selected || decision.selected === current) continue
+        const decision = await selectReachableNode(group.members, groupHistories, profile.aiOptimizer, decisionOptions, {
+          maxAttempts: Math.min(3, group.members.length),
+          probe: async (node) => {
+            const key = JSON.stringify([node, group.url])
+            if (verifiedProbes.has(key)) { shared++; return verifiedProbes.get(key) }
+            const result = await coordinator.probe(node, group.url, {
+              intervalMs: 0,
+              timeoutMs: Math.min(15_000, Math.max(5_000, group.intervalMs || 5_000)),
+              force: true,
+            })
+            tested++
+            verifiedProbes.set(key, result)
+            return result
+          },
+          onSample: (node, sample) => history.recordAiProbe?.(node, group.url, sample),
+        })
+        history.flush()
+        if (!decision.selected) {
+          if (decision.verificationAttempts) log(`[ai-optimizer] ${group.tag}: 最近 ${decision.verificationAttempts} 个同组候选强制测速均未通过,保留当前选择`)
+          continue
+        }
+        if (decision.selected === current) continue
         await select(group.tag, decision.selected)
         selections[group.tag] = decision.selected
-        selected.push({ group: group.tag, node: decision.selected, score: decision.candidates.find((c) => c.name === decision.selected)?.score, scoring: decision.candidates.find((c) => c.name === decision.selected)?.scoring || 'rules' })
+        selected.push({ group: group.tag, node: decision.selected, score: decision.candidates.find((c) => c.name === decision.selected)?.score, scoring: decision.candidates.find((c) => c.name === decision.selected)?.scoring || 'rules', verified: decision.verified, verificationAttempts: decision.verificationAttempts })
         switched++
       }
       lastRunAt = now()
       lastError = ''
-      stats = { tested, switched, shared: Math.max(0, groups.reduce((n, g) => n + g.members.length, 0) - unique.size) }
+      stats = { tested, switched, shared: Math.max(0, groups.reduce((n, g) => n + g.members.length, 0) - unique.size) + shared }
       if (selected.length) log(`[ai-optimizer] 已按共享延迟历史更新 ${selected.length} 个自动组选择`)
       return { enabled: true, ...stats, selected }
     } catch (error) {

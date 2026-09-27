@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createAiOptimizer } from './ai-optimizer-manager.mjs'
-import { scoreNode, selectBestNode, summarizeNodeHistory } from './ai-optimizer.mjs'
+import { scoreNode, selectBestNode, selectReachableNode, summarizeNodeHistory } from './ai-optimizer.mjs'
 
 const now = Date.parse('2026-09-27T00:00:00Z')
 const history = (delays) => delays.map((delay, i) => ({ time: new Date(now - (delays.length - i) * 60_000).toISOString(), delay }))
@@ -31,6 +31,36 @@ test('ignores unmeasured/fully failing candidates and sensitivity prevents tiny 
   assert.ok(Number.isFinite(scoreNode(summarizeNodeHistory(history([45]), { now }), {})))
 })
 
+test('rejects a stale top-ranked node and verifies the next pick from the same group', async () => {
+  const t = Date.now()
+  const histories = { staleWinner: history([10]), verifiedWinner: history([80]), outsideGroup: history([1]) }
+  const probes = []
+  const recorded = []
+  const decision = await selectReachableNode(['staleWinner', 'verifiedWinner'], histories, { minSamples: 1 }, {}, {
+    maxAttempts: 3,
+    probe: async (name) => {
+      probes.push(name)
+      return name === 'staleWinner' ? { ok: false, delay: 0, at: t } : { ok: true, delay: 83, at: t }
+    },
+    onSample: (name, sample) => recorded.push([name, sample.delay]),
+  })
+  assert.deepEqual(probes, ['staleWinner', 'verifiedWinner'])
+  assert.equal(decision.selected, 'verifiedWinner')
+  assert.equal(decision.verified, true)
+  assert.deepEqual(recorded, [['staleWinner', 0], ['verifiedWinner', 83]])
+  assert.ok(decision.candidates.every((candidate) => ['staleWinner', 'verifiedWinner'].includes(candidate.name)))
+})
+
+test('does not select any node unless a fresh probe succeeds', async () => {
+  const t = Date.now()
+  const decision = await selectReachableNode(['broken'], { broken: history([5]) }, { minSamples: 1 }, {}, {
+    maxAttempts: 2,
+    probe: async () => ({ ok: false, delay: 0, at: t }),
+  })
+  assert.equal(decision.selected, '')
+  assert.equal(decision.verified, false)
+})
+
 test('runs AI separately inside each group and shares one probe for overlapping node/URL members', async () => {
   const timestamp = new Date(Date.now() - 120_000).toISOString()
   const records = Object.fromEntries([['A', 60], ['B', 40], ['C', 20]].map(([tag, delay]) => [tag, Array(5).fill({ time: timestamp, delay })]))
@@ -58,8 +88,8 @@ test('runs AI separately inside each group and shares one probe for overlapping 
     log: () => {},
   })
   const result = await optimizer.tick()
-  assert.equal(probes.length, 3)
-  assert.deepEqual(new Set(probes), new Set(['A|https://probe.test/ping', 'B|https://probe.test/ping', 'C|https://probe.test/ping']))
+  assert.equal(probes.length, 2, 'AI verifies only its chosen candidate per group rather than serially scanning every configured node first')
+  assert.deepEqual(new Set(probes), new Set(['B|https://probe.test/ping', 'C|https://probe.test/ping']))
   assert.deepEqual(writes, [['Asia', 'B'], ['ChatGPT', 'C']])
   assert.equal(result.shared, 1)
 })

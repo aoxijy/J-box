@@ -36,6 +36,28 @@ export const scoreNode = (summary, settings = {}) => {
   return Math.max(0, latency + tailPenalty + failurePenalty + jitterPenalty)
 }
 
+export async function selectReachableNode(members, histories, settings, options = {}, { probe, onSample = () => {}, maxAttempts = 3 } = {}) {
+  const attempted = new Set()
+  const working = { ...(histories || {}) }
+  const limit = Math.min(Array.isArray(members) ? members.length : 0, Math.max(1, Math.trunc(maxAttempts) || 1))
+  let lastDecision = { selected: '', candidates: [] }
+  for (let i = 0; i < limit; i++) {
+    const available = (Array.isArray(members) ? members : []).filter((name) => !attempted.has(name))
+    lastDecision = selectBestNode(available, working, settings, options)
+    if (!lastDecision.selected) break
+    const node = lastDecision.selected
+    attempted.add(node)
+    let result
+    try { result = await probe(node) } catch { result = { ok: null } }
+    if (result?.ok !== true && result?.ok !== false) continue
+    const sample = { time: new Date(Number.isFinite(result.at) ? result.at : Date.now()).toISOString(), delay: result.ok && Number.isFinite(result.delay) && result.delay > 0 ? result.delay : 0 }
+    working[node] = [...(Array.isArray(working[node]) ? working[node] : []), sample].slice(-10)
+    onSample(node, sample, result)
+    if (sample.delay > 0) return { ...lastDecision, selected: node, verified: true, verificationAttempts: attempted.size }
+  }
+  return { ...lastDecision, selected: '', verified: false, verificationAttempts: attempted.size }
+}
+
 export const selectBestNode = (members, histories, settings, options = {}) => {
   const candidates = (Array.isArray(members) ? members : []).map((name, index) => {
     const summary = summarizeNodeHistory(histories && histories[name], options)

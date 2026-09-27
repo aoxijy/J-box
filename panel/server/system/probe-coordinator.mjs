@@ -136,6 +136,7 @@ export const createProbeCoordinator = ({
   }
 
   const clear = (node, url) => entries.delete(keyOf(node, url))
+  const reset = () => { entries.clear(); hits = 0; misses = 0 }
   const stats = () => ({ size: entries.size, inflight: inflight.size, hits, misses })
 
   // 手动测速(面板"测速"按钮、订阅页一键测速)不走这里:那条路有自己的强制语义,
