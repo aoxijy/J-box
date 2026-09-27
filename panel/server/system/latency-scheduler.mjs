@@ -187,6 +187,7 @@ export const createLatencyScheduler = ({
   let timer = null
   const start = () => {
     if (timer) return
+    tick().catch((err) => log(`[latency] 首轮测速失败:${err instanceof Error ? err.message : err}`))
     timer = setInterval(() => { tick().catch((err) => log(`[latency] tick 失败:${err instanceof Error ? err.message : err}`)) }, tickMs)
     if (typeof timer.unref === 'function') timer.unref()
   }

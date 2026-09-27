@@ -130,6 +130,17 @@ test('内核没在跑 → 这个 tick 什么都不做', async () => {
   assert.deepEqual(await s.tick(), { skipped: 'kernel' })
 })
 
+test('start runs an initial scan immediately instead of waiting for the first interval', async () => {
+  const k = kernel(proxiesFixture())
+  const store = memStore()
+  const history = createLatencyHistory({ store, now: () => T0 })
+  const scheduler = createLatencyScheduler({ store, ctx: ctxWithKernel(), paths, history, coordinator: createProbeCoordinator({ store, fetchImpl: k.fetchImpl, now: () => T0 }), fetchImpl: k.fetchImpl, now: () => T0, tickMs: 60_000, log: () => {} })
+  scheduler.start()
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  scheduler.stop()
+  assert.ok(k.calls.includes('http://127.0.0.1:9095/proxies'))
+})
+
 test('AI opt-in collects per-node, per-URL shared probe history', async () => {
   const clock = T0
   const k = kernel(proxiesFixture(), () => clock)

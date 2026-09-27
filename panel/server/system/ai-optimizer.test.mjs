@@ -61,6 +61,16 @@ test('does not select any node unless a fresh probe succeeds', async () => {
   assert.equal(decision.verified, false)
 })
 
+test('new/unmeasured candidates are eligible for a fresh probe on cold start', async () => {
+  const t = Date.now()
+  const result = await selectReachableNode(['freshA', 'freshB'], {}, { minSamples: 5 }, { now: t }, {
+    maxAttempts: 2,
+    probe: async (node) => ({ ok: node === 'freshA', delay: node === 'freshA' ? 64 : 0, at: t }),
+  })
+  assert.equal(result.selected, 'freshA')
+  assert.equal(result.verified, true)
+})
+
 test('runs AI separately inside each group and shares one probe for overlapping node/URL members', async () => {
   const timestamp = new Date(Date.now() - 120_000).toISOString()
   const records = Object.fromEntries([['A', 60], ['B', 40], ['C', 20]].map(([tag, delay]) => [tag, Array(5).fill({ time: timestamp, delay })]))

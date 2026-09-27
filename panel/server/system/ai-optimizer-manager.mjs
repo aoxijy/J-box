@@ -159,7 +159,7 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
           }
         }
         const decision = await selectReachableNode(group.members, groupHistories, profile.aiOptimizer, decisionOptions, {
-          maxAttempts: Math.min(3, group.members.length),
+          maxAttempts: Math.min(12, group.members.length),
           probe: async (node) => {
             const key = JSON.stringify([node, group.url])
             if (verifiedProbes.has(key)) { shared++; return verifiedProbes.get(key) }

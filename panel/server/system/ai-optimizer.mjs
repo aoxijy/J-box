@@ -44,8 +44,12 @@ export async function selectReachableNode(members, histories, settings, options 
   for (let i = 0; i < limit; i++) {
     const available = (Array.isArray(members) ? members : []).filter((name) => !attempted.has(name))
     lastDecision = selectBestNode(available, working, settings, options)
-    if (!lastDecision.selected) break
-    const node = lastDecision.selected
+    const minSamples = Math.min(10, Math.max(1, Number(settings?.minSamples) || 1))
+    const node = lastDecision.selected || available.find((name) => {
+      const summary = summarizeNodeHistory(working[name], options)
+      return summary.samples < minSamples || summary.failureRate >= 1
+    }) || ''
+    if (!node) break
     attempted.add(node)
     let result
     try { result = await probe(node) } catch { result = { ok: null } }
