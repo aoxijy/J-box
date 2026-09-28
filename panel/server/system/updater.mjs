@@ -23,7 +23,8 @@ export const parseVersion = (v) => {
 }
 export const compareVersions = (a, b) => {
   const pa = parseVersion(a), pb = parseVersion(b)
-  if (!pa || !pb) return 0
+  if (!pa) return pb ? -1 : 0
+  if (!pb) return 1
   for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] - pb[i]
   return 0
 }
