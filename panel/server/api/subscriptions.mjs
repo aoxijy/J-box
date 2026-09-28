@@ -274,28 +274,44 @@ export const resolveNodes = async ({ url, urls, content, name }, fetchImpl, rena
   const list = normalizeUrls(urls, url)
   if (!list.length) throw new Error('url or content is required')
 
-  // 逐个 UA 试,第一份能解析出节点的就采用。多发的请求只在失败路径上产生:
-  // 首选 UA 就拿到节点时(绝大多数情况)只有一次请求。
-  // 服务器按状态码拒掉的(403 / 401 / 406…)换下一个 UA 继续;网络不通、地址不合法这类错误和 UA
-  // 无关,直接报出去,不白等几轮超时(GitHub #27:以前第一个 UA 被 403 就整次失败,后面的 UA 轮不到)
+  // 同一订阅地址可能按 User-Agent 返回不同节点集:不能因首份可解析就假定它完整。
+  // 对受限且固定的 UA 列表并行拉取,采用解析节点最多、跳过项最少的一份;同分按列表顺序稳定决胜。
+  // 这样既避免串行重试把刷新拖成长时间,也避免首个 UA 恰好只给部分节点时覆盖完整快照。
+  // 非 HTTP 网络错误只在所有 UA 都没有可用响应时向上抛;HTTP 拒绝继续尝试其他客户端标识。
   const fetchOne = async (oneUrl) => {
     let firstParsed = null
     const rejected = []
-    for (const userAgent of SUBSCRIPTION_USER_AGENTS) {
-      let text
+    const fetchCandidate = async (userAgent) => {
       try {
-        text = await fetchSubscriptionText(oneUrl, fetchImpl, lookup, userAgent)
+        const text = await fetchSubscriptionText(oneUrl, fetchImpl, lookup, userAgent)
+        return { userAgent, parsed: parseSubscription(text) }
       } catch (err) {
-        if (err && err.httpStatus) {
-          rejected.push(`${userAgent} → HTTP ${err.httpStatus}`)
-          continue
-        }
-        throw err
+        if (err && err.httpStatus) return { userAgent, rejection: `${userAgent} → HTTP ${err.httpStatus}` }
+        return { userAgent, error: err }
       }
-      const parsed = parseSubscription(text)
-      if (parsed.nodes.length) return parsed
-      if (!firstParsed) firstParsed = parsed
     }
+    // 首个客户端发生传输 / DNS 错误时,立即失败,不再发一串注定失败的请求。
+    const firstAttempt = await fetchCandidate(SUBSCRIPTION_USER_AGENTS[0])
+    if (firstAttempt.error) throw firstAttempt.error
+    const attempts = [firstAttempt, ...await Promise.all(
+      SUBSCRIPTION_USER_AGENTS.slice(1).map(fetchCandidate),
+    )]
+    for (const attempt of attempts) {
+      if (attempt.rejection) rejected.push(attempt.rejection)
+      if (!firstParsed && attempt.parsed && !attempt.parsed.nodes.length) firstParsed = attempt.parsed
+    }
+    const usable = attempts.filter((attempt) => attempt.parsed && attempt.parsed.nodes.length)
+    if (usable.length) {
+      const best = usable.reduce((winner, candidate) => {
+        const countDelta = candidate.parsed.nodes.length - winner.parsed.nodes.length
+        if (countDelta > 0) return candidate
+        if (countDelta < 0) return winner
+        return (candidate.parsed.skipped?.length || 0) < (winner.parsed.skipped?.length || 0) ? candidate : winner
+      })
+      return best.parsed
+    }
+    const networkFailure = attempts.find((attempt) => attempt.error)
+    if (networkFailure) throw networkFailure.error
     // Node fetch 全被按状态码拒了:换系统 curl 再来一轮。有些机场的 WAF 认的是 TLS / HTTP 指纹而不是 UA——
     // 同一台机器、同一个出口、同一个 UA,Node 403、curl 200(GitHub #37)。curl 那边同样逐跳校验地址、钉死解析
     if (curl && rejected.length) {

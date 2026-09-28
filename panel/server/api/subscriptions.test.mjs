@@ -386,7 +386,7 @@ test('round2:合法的 302 重定向链(公网 → 公网)仍然放行', async (
     assert.equal(res.status, 200)
     const body = await res.json()
     assert.equal(body.nodes.length, 1)
-    assert.equal(hops, 2) // 首跳 + 跟随一次重定向
+    assert.equal(hops, 12) // 6 个 UA 各走首跳 + 跟随一次重定向
   } finally {
     await close()
   }
@@ -452,8 +452,32 @@ test('拉订阅时必须带机场认得的 User-Agent,而不是 Node 默认的 "
   try {
     const res = await postJson(baseUrl, '/api/jbox/subscriptions', { url: 'https://sub.example.com/x', name: 'S' })
     assert.equal(res.status, 200)
-    assert.equal(seenUserAgents.length, 1, '首选 UA 就拿到节点时只应请求一次')
+    assert.ok(seenUserAgents.length > 1, '不同 UA 的响应可能包含不同节点集,必须比较候选响应')
     assert.match(seenUserAgents[0], /clash/i)
+  } finally {
+    await close()
+  }
+})
+
+test('订阅 UA 响应数量不同时,遍历候选并采用解析节点最多的完整响应', async () => {
+  const seenUserAgents = []
+  const fetchImpl = async (_url, init) => {
+    const ua = init?.headers?.['User-Agent'] || ''
+    seenUserAgents.push(ua)
+    const body = /clash-verge/i.test(ua)
+      ? HK_LINE
+      : /sing-box/i.test(ua)
+        ? SHARELINK_MULTI
+        : JP_LINE
+    return { ok: true, status: 200, text: async () => body }
+  }
+  const { baseUrl, store, close } = await startApp(fetchImpl)
+  try {
+    const res = await postJson(baseUrl, '/api/jbox/subscriptions', { url: 'https://sub.example.com/x', name: 'S' })
+    assert.equal(res.status, 200)
+    assert.equal((await res.json()).nodeCount, 2)
+    assert.equal(store.getNodes().length, 2)
+    assert.ok(seenUserAgents.length > 1, '必须检查其他客户端 UA,不能首个非空就提前结束')
   } finally {
     await close()
   }
@@ -529,7 +553,7 @@ test('只改名字不触发重新拉取(机场抽风时也得能改名)', async 
   const { baseUrl, store, close } = await startApp(fetchImpl)
   try {
     const created = await (await postJson(baseUrl, '/api/jbox/subscriptions', { url: 'https://sub.example.com/x', name: '旧名字' })).json()
-    assert.equal(fetchCount, 1)
+    assert.equal(fetchCount, 6)
 
     const res = await fetch(`${baseUrl}/api/jbox/subscriptions/${created.id}`, {
       method: 'PATCH',
@@ -537,7 +561,7 @@ test('只改名字不触发重新拉取(机场抽风时也得能改名)', async 
       body: JSON.stringify({ name: '新名字' }),
     })
     assert.equal(res.status, 200)
-    assert.equal(fetchCount, 1, '链接与重命名规则都没变,不应再发请求')
+    assert.equal(fetchCount, 6, '链接与重命名规则都没变,不应再发请求')
     assert.equal(store.getSubscriptions()[0].name, '新名字')
     assert.equal(store.getSubscriptions()[0].nodeCount, 2, '节点数不该被改动')
   } finally {
@@ -564,7 +588,7 @@ test('开了订阅名前缀时,改名字必须重新解析(否则节点上挂着
       body: JSON.stringify({ name: '新名字' }),
     })
     assert.equal(res.status, 200)
-    assert.equal(fetchCount, 2, '名字即前缀,改名等于改所有节点名,必须重新解析')
+    assert.equal(fetchCount, 12, '名字即前缀,改名等于改所有节点名,必须重新解析')
     assert.ok(store.getNodes().every((n) => n.tag.startsWith('新名字 | ')), '前缀要跟着新名字走')
   } finally {
     await close()
@@ -585,7 +609,7 @@ test('没开前缀时改名字仍然不重新拉取', async () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'B' }),
     })
-    assert.equal(fetchCount, 1)
+    assert.equal(fetchCount, 6)
   } finally {
     await close()
   }
@@ -862,12 +886,12 @@ test('刷新和改地址都按 urls 逐个重拉;只改名字不拉', async () =
   const { baseUrl, store, close } = await startApp(fetchImpl)
   try {
     const created = await (await postJson(baseUrl, '/api/jbox/subscriptions', { urls: ['http://a', 'http://b'], name: 'Sub' })).json()
-    assert.deepEqual(calls, ['http://a', 'http://b'])
+    assert.deepEqual(calls.sort(), [...Array(6).fill('http://a'), ...Array(6).fill('http://b')].sort())
 
     calls.length = 0
     const refresh = await postJson(baseUrl, `/api/jbox/subscriptions/${created.id}/refresh`, {})
     assert.equal(refresh.status, 200)
-    assert.deepEqual(calls, ['http://a', 'http://b'])
+    assert.deepEqual(calls.sort(), [...Array(6).fill('http://a'), ...Array(6).fill('http://b')].sort())
 
     calls.length = 0
     const rename = await fetch(`${baseUrl}/api/jbox/subscriptions/${created.id}`, {
@@ -880,7 +904,7 @@ test('刷新和改地址都按 urls 逐个重拉;只改名字不拉', async () =
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ urls: ['http://b'] }),
     })
     assert.equal(shrink.status, 200)
-    assert.deepEqual(calls, ['http://b'])
+    assert.deepEqual(calls, Array(6).fill('http://b'))
     const [sub] = store.getSubscriptions()
     assert.deepEqual(sub.urls, ['http://b'])
     assert.equal(sub.url, 'http://b')
@@ -945,11 +969,11 @@ test('autoUpdate:新建时存下(归一化到 1~30 天、0~23 点),改它不重�
   try {
     const created = await (await postJson(baseUrl, '/api/jbox/subscriptions', { url: 'http://a', name: 'A', autoUpdate: { enabled: true, days: 99, hour: 30 } })).json()
     assert.deepEqual(store.getSubscriptions()[0].autoUpdate, { enabled: true, days: 30, hour: 23 })
-    assert.equal(fetched, 1)
+    assert.equal(fetched, 6)
 
     const r = await patch(created.id, { autoUpdate: { enabled: true, days: 3, hour: 4 } })
     assert.equal(r.changed, false)
-    assert.equal(fetched, 1, '改计划不重拉')
+    assert.equal(fetched, 6, '改计划不重拉')
     assert.deepEqual(store.getSubscriptions()[0].autoUpdate, { enabled: true, days: 3, hour: 4 })
 
     await patch(created.id, { autoUpdate: { enabled: false } })
@@ -1032,10 +1056,9 @@ test('拉订阅时把校验过的地址交给 fetch 实现(init.lookup),每一�
   try {
     const res = await postJson(baseUrl, '/api/jbox/subscriptions/preview', { url: 'http://first.example/sub' })
     assert.equal(res.status, 200)
-    assert.deepEqual(seen, [
-      { url: 'http://first.example/sub', address: '93.184.216.34', family: 4 },
-      { url: 'http://second.example/sub', address: '8.8.8.8', family: 4 },
-    ])
+    assert.equal(seen.length, 12)
+    assert.ok(seen.filter((x) => x.url === 'http://first.example/sub').every((x) => x.address === '93.184.216.34' && x.family === 4))
+    assert.ok(seen.filter((x) => x.url === 'http://second.example/sub').every((x) => x.address === '8.8.8.8' && x.family === 4))
   } finally {
     await close()
   }
@@ -1055,7 +1078,7 @@ test('创建时首个 UA 被 403 → 换下一个 UA 继续,第二个 UA 拿到�
     const res = await postJson(baseUrl, '/api/jbox/subscriptions', { url: 'http://sub.example.com/a', name: 'Sub A' })
     assert.equal(res.status, 200)
     assert.equal((await res.json()).nodeCount, 2)
-    assert.equal(seen.length, 2)
+    assert.equal(seen.length, 6)
     assert.notEqual(seen[0], seen[1], '第二次请求要换 UA')
     assert.equal(store.getNodes().length, 2)
   } finally {
@@ -1110,7 +1133,7 @@ test('#42:内网 / 回环 / CGNAT 的订阅地址正常拉取(127.0.0.1、192.16
     try {
       const res = await postJson(baseUrl, '/api/jbox/subscriptions/preview', { url: c.url })
       assert.equal(res.status, 200, `${c.url} 应能拉取`)
-      assert.equal(called, 1, `${c.url} 应真正发起拉取`)
+      assert.equal(called, 6, `${c.url} 应尝试所有客户端格式`)
     } finally {
       await close()
     }
