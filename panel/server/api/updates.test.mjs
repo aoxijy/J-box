@@ -27,15 +27,24 @@ test('版本比较:只看前三段;git describe 的开发版和同号 tag 相等
 
 test('fetchLatestVersion:从 releases/latest 的 302 跳转里取 tag,直连失败退到镜像', async () => {
   const calls = []
-  const fetchImpl = async (url) => {
+  const fetchImpl = async (url, options) => {
     calls.push(url)
     if (url.startsWith('https://github.com/')) throw new Error('offline')
-    return { status: 302, headers: new Map([['location', 'https://github.com/aoxijy/J-box/releases/tag/v0.2.3']]), url: '' }
+    assert.equal(options.redirect, 'manual')
+    if (url.includes('ghfast.top/')) return { status: 302, headers: new Map([['location', '/https://github.com/aoxijy/J-box/releases/tag/v0.2.3']]), url: 'https://ghfast.top/https://github.com/aoxijy/J-box/releases/latest' }
+    throw new Error('unexpected mirror')
   }
-  const r = await fetchLatestVersion(fetchImpl, { mirrors: ['https://mirror.test/'] })
+  const r = await fetchLatestVersion(fetchImpl, { mirrors: ['https://ghfast.top/'] })
   assert.equal(r.latest, 'v0.2.3')
-  assert.equal(r.via, 'https://mirror.test/')
+  assert.equal(r.via, 'https://ghfast.top/')
   assert.equal(calls.length, 2)
+})
+
+test('fetchLatestVersion:direct response URL is not mistaken for the final release tag', async () => {
+  await assert.rejects(
+    () => fetchLatestVersion(async (url) => ({ status: 200, headers: new Map(), url }), { mirrors: [] }),
+    /没能取到最新版本号/,
+  )
 })
 
 test('GET /update/status + POST /update/run:读 meta/通道/状态文件,发起时调 update.sh --detach --mirror', async () => {

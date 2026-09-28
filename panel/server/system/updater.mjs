@@ -124,7 +124,14 @@ export const fetchLatestTag = async (fetchImpl, repo, { sources = ['', ...UPDATE
       const location = res.headers.get('location') || ''
       let tag = /\/releases\/tag\/([^/?#]+)/.exec(location)?.[1]
       // 有的镜像会把跳转吃掉直接返回落地页:从最终 URL 里再找一次
-      if (!tag && res.url) tag = /\/releases\/tag\/([^/?#]+)/.exec(res.url)?.[1]
+      // 镜像有的以 200 + 最终 URL 表示落地页;direct fetch 的 url 也可能指向初始地址。
+      if (!tag && prefix && res.url) {
+        tag = /\/releases\/tag\/([^/?#]+)/.exec(res.url)?.[1]
+        // ghfast.top returns 302 with a path-relative Location; combine it with mirror base.
+        if (!tag && location.startsWith('/')) {
+          try { tag = /\/releases\/tag\/([^/?#]+)/.exec(new URL(location, prefix).pathname)?.[1] } catch {}
+        }
+      }
       if (tag) return { latest: decodeURIComponent(tag), via: prefix || 'direct' }
       lastError = `HTTP ${res.status}`
     } catch (err) {
