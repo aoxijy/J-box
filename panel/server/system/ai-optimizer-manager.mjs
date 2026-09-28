@@ -183,11 +183,18 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
             modelStatus = { ...modelStatus, error: error instanceof Error ? error.message : String(error) }
           }
         }
+        const probeIntervalMs = Number(profile.aiOptimizer?.intervalSeconds) > 0
+          ? Number(profile.aiOptimizer.intervalSeconds) * 1000
+          : Math.max(15_000, Number(group.intervalMs) || 300_000)
         const decision = await selectReachableNode(group.members, groupHistories, profile.aiOptimizer, decisionOptions, {
           maxAttempts: Math.min(12, group.members.length),
           probe: async (node) => {
             const key = JSON.stringify([node, group.url])
             if (verifiedProbes.has(key)) { shared++; return verifiedProbes.get(key) }
+            const samples = groupHistories[node] || []
+            const latestAt = samples.reduce((latest, sample) => Math.max(latest, Date.parse(sample?.time) || 0), 0)
+            const age = now() - latestAt
+            if (latestAt > 0 && age >= 0 && age < probeIntervalMs) return { ok: null, cached: true }
             const result = await coordinator.probe(node, group.url, {
               intervalMs: 0,
               timeoutMs: Math.min(15_000, Math.max(5_000, group.intervalMs || 5_000)),

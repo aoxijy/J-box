@@ -8,6 +8,7 @@ test('AI optimizer applies defaults and clamps invalid numeric values', () => {
   assert.equal(settings.policyPriority, 100)
   assert.equal(settings.sensitivityMs, 0)
   assert.equal(settings.minSamples, 1)
+  assert.equal(normalizeAiOptimizerSettings({}).intervalSeconds, 300)
   assert.equal(settings.intervalSeconds, 3600)
   assert.equal(settings.latencyWeight, 70)
   assert.equal(settings.asnPriority, false)

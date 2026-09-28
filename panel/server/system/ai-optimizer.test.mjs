@@ -104,6 +104,40 @@ test('runs AI separately inside each group and shares one probe for overlapping 
   assert.equal(result.shared, 1)
 })
 
+test('does not force-probe an AI node more than once per configured sampling interval', async () => {
+  let clock = now
+  const sample = { time: new Date(clock - 300_000).toISOString(), delay: 42 }
+  const samples = [sample]
+  const probes = []
+  const meta = { generatedAt: 'throttle-test', aiGroups: [{ tag: 'AI', url: 'https://probe.test/ping', intervalMs: 60_000, members: ['HK-08'] }] }
+  const store = {
+    getProfile: () => ({ aiOptimizer: { enabled: true, collectTrainingData: true, intervalSeconds: 300, minSamples: 5, maxSampleAgeHours: 168 } }),
+    getClashSecret: () => '',
+  }
+  const optimizer = createAiOptimizer({
+    store, ctx: { readFile: async () => JSON.stringify(meta) }, paths: { etc: '/etc/jbox', dataDir: '/data' },
+    history: {
+      getAiForUrl: () => ({ 'HK-08': samples }),
+      recordAiProbe: (_node, _url, value) => samples.push(value),
+      flush: () => {},
+    },
+    coordinator: { probe: async (node, _url, options) => { probes.push({ node, options }); return { ok: true, delay: 40, at: clock } } },
+    fetchImpl: async (url) => ({
+      ok: true,
+      json: async () => ({ proxies: { AI: { now: 'HK-08', all: ['HK-08'] } } }),
+    }),
+    now: () => clock,
+  })
+
+  await optimizer.tick()
+  clock += 30_000
+  await optimizer.tick()
+  assert.equal(probes.length, 1, '30-second optimizer ticks must not bypass the configured 300-second probe interval')
+  clock += 270_000
+  await optimizer.tick()
+  assert.equal(probes.length, 2, 'a new forced probe becomes due at 300 seconds')
+})
+
 test('resetTrainingData clears only AI history and removes URL-scoped model files', async () => {
   const { createHash } = await import('node:crypto')
   const url = 'https://probe.test/reset'
