@@ -9,6 +9,7 @@ const DEFAULTS = Object.freeze({
   latencyWeight: 70,
   reliabilityWeight: 30,
   jitterWeight: 20,
+  probeConcurrency: 3,
   intervalSeconds: 60,
 })
 
@@ -29,6 +30,7 @@ export function normalizeAiOptimizerSettings(value = {}) {
     latencyWeight: integer('latencyWeight', DEFAULTS.latencyWeight, 0, 100),
     reliabilityWeight: integer('reliabilityWeight', DEFAULTS.reliabilityWeight, 0, 100),
     jitterWeight: integer('jitterWeight', DEFAULTS.jitterWeight, 0, 100),
+    probeConcurrency: integer('probeConcurrency', DEFAULTS.probeConcurrency, 1, 8),
     intervalSeconds: integer('intervalSeconds', DEFAULTS.intervalSeconds, 15, 3600),
   }
 }

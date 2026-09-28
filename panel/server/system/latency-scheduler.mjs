@@ -38,6 +38,17 @@ const withTimeout = async (fetchImpl, url, init, timeoutMs) => {
   }
 }
 
+const mapLimit = async (items, concurrency, fn) => {
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const item = items[cursor++]
+      await fn(item)
+    }
+  })
+  await Promise.all(workers)
+}
+
 // 一个成员可能是节点,也可能是另一个组(嵌套 URLTest):按 all 递归展开成真实叶子节点。
 // 组里带环(不该出现,生成配置时就挡了)时靠 seen 兜底。
 export const leafNodesOf = (tag, proxies, seen = new Set()) => {
@@ -62,6 +73,31 @@ export const readUrltestGroups = (config) => (Array.isArray(config && config.out
     intervalMs: parseDuration(o.interval) || DEFAULT_INTERVAL_MS,
     members: Array.isArray(o.outbounds) ? o.outbounds : [],
   }))
+
+// AI 接管后用户自动组在内核配置中变为 selector,不再是 urltest。
+// 其测速目标和严格成员范围由 deploy-runner 同次生成的 config.meta.json.aiGroups 保存。
+// 把这份映射并入探测兴趣表,否则 collectTrainingData=true 时不会给 AI 组候选持续采样。
+export const readProbeGroups = (config, meta = {}, aiIntervalMs = 0) => {
+  const standard = readUrltestGroups(config)
+  const seen = new Set(standard.map((group) => group.tag))
+  const outbounds = Array.isArray(config?.outbounds) ? config.outbounds : []
+  const ai = (Array.isArray(meta?.aiGroups) ? meta.aiGroups : [])
+    .filter((g) => g && typeof g.tag === 'string' && g.tag && typeof g.url === 'string' && g.url && Array.isArray(g.members))
+    .filter((g) => !seen.has(g.tag))
+    .map((g) => {
+      const selector = outbounds.find((outbound) => outbound?.type === 'selector' && outbound.tag === g.tag)
+      if (!selector || !Array.isArray(selector.outbounds)) return null
+      const selectorMembers = new Set(selector.outbounds.filter((member) => typeof member === 'string' && member))
+      return {
+        tag: g.tag,
+        url: kernelTestUrl(g.url),
+        intervalMs: aiIntervalMs > 0 ? aiIntervalMs : (Number.isFinite(g.intervalMs) && g.intervalMs > 0 ? g.intervalMs : DEFAULT_INTERVAL_MS),
+        members: g.members.filter((member) => typeof member === 'string' && member && selectorMembers.has(member)),
+      }
+    })
+    .filter((group) => group && group.members.length > 0)
+  return [...standard, ...ai]
+}
 
 // 组 → 「节点 + 测速地址」的兴趣表。同一个键被多个组用到时,interval 取最短的那个:
 // 这就是"共享节点的实际探测周期 = 用到它的组里最短的 interval"。没有测速地址的组跳过。
@@ -118,7 +154,15 @@ export const createLatencyScheduler = ({
     const uptime = await processUptime(ctx, 'sing-box')
     return typeof uptime === 'number' ? now() - uptime * 1000 : null
   }
-  const readGroups = async () => readUrltestGroups(JSON.parse(await ctx.readFile(paths.configPath)))
+  const readGroups = async () => {
+    const config = JSON.parse(await ctx.readFile(paths.configPath))
+    let meta = {}
+    try { meta = JSON.parse(await ctx.readFile(`${paths.etc}/config.meta.json`)) } catch {}
+    const profile = store.getProfile?.() || {}
+    const aiInterval = profile.aiOptimizer?.intervalSeconds > 0 ? profile.aiOptimizer.intervalSeconds * 1000 : 0
+    if (profile.aiOptimizer?.collectTrainingData !== true) meta = { ...meta, aiGroups: [] }
+    return readProbeGroups(config, meta, aiInterval)
+  }
 
   // 只读一次 /proxies 把内核已经测出的结果记下来,不发起任何测速
   // (面板手动测完 / 部署完之后调,新结果立刻进历史)
@@ -149,13 +193,14 @@ export const createLatencyScheduler = ({
     }
     const probed = []
     if (coordinator) {
-      for (const it of interests) {
+      const probeConcurrency = Math.min(8, Math.max(1, Math.round(Number(store.getProfile?.()?.aiOptimizer?.probeConcurrency) || 3)))
+      await mapLimit(interests, probeConcurrency, async (it) => {
         const collectForAi = (store.getProfile?.() || {}).aiOptimizer?.collectTrainingData === true && typeof history.recordAiProbe === 'function'
         if (collectForAi) {
           const samples = history.getAiForUrl?.(it.url)?.[it.node] || []
           const latestAt = samples.reduce((latest, sample) => Math.max(latest, Date.parse(sample?.time) || 0), 0)
           const age = now() - latestAt
-          if (latestAt > 0 && age >= 0 && age < it.intervalMs) continue
+          if (latestAt > 0 && age >= 0 && age < it.intervalMs) return
           // Kernel proxy history has no URL provenance; discard its seeded cache before collecting AI data.
           coordinator.clear?.(it.node, it.url)
         }
@@ -164,7 +209,7 @@ export const createLatencyScheduler = ({
         if (collectForAi && (r?.ok === true || r?.ok === false) && Number.isFinite(r.at) && Number.isFinite(r.delay)) {
           history.recordAiProbe(it.node, it.url, { time: new Date(r.at).toISOString(), delay: r.ok ? r.delay : 0 })
         }
-      }
+      })
       history.flush?.()
     }
     // 测完重读一次:新结果立刻进历史(节点按自己最短的窗口去重,组按自己的间隔去重)

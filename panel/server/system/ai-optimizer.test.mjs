@@ -103,3 +103,28 @@ test('runs AI separately inside each group and shares one probe for overlapping 
   assert.deepEqual(writes, [['Asia', 'B'], ['ChatGPT', 'C']])
   assert.equal(result.shared, 1)
 })
+
+test('resetTrainingData clears only AI history and removes URL-scoped model files', async () => {
+  const { createHash } = await import('node:crypto')
+  const url = 'https://probe.test/reset'
+  const modelPath = `/data/ai-optimizer/model-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.txt`
+  const files = new Map([
+    ['/etc/jbox/config.meta.json', JSON.stringify({ generatedAt: 'reset-test', aiGroups: [{ tag: 'Asia', url, intervalMs: 60_000, members: ['A', 'B'] }] })],
+    [modelPath, 'version=4\\nmax_feature_idx=9\\n'],
+    [`${modelPath}.meta.json`, JSON.stringify({ samples: 99 })],
+  ])
+  let cleared = 0
+  const store = { getProfile: () => ({ aiOptimizer: { enabled: true } }), getClashSecret: () => '' }
+  const optimizer = createAiOptimizer({
+    store,
+    ctx: { readFile: async (path) => files.get(path), exists: async (path) => files.has(path), remove: async (path) => files.delete(path) },
+    paths: { etc: '/etc/jbox', dataDir: '/data' },
+    history: { clearAiHistory: () => { cleared++; return 2 }, getAiForUrl: () => ({}) },
+    coordinator: {}, fetchImpl: async () => { throw new Error('not used') },
+  })
+  const result = await optimizer.resetTrainingData()
+  assert.deepEqual(result, { ok: true, removedSamples: 2, removedModels: 2 })
+  assert.equal(cleared, 1)
+  assert.equal(files.has(modelPath), false)
+  assert.equal(files.has(`${modelPath}.meta.json`), false)
+})

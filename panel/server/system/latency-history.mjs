@@ -193,5 +193,13 @@ export const createLatencyHistory = ({ store, now = () => Date.now() }) => {
     return removed
   }
 
-  return { record, recordSamples, recordFromProxies, recordAiProbe, getAiForUrl, prune, get: () => cache, flush, updatedAt: () => updatedAt }
+  const clearAiHistory = () => {
+    const removed = Object.values(aiCache).reduce((count, bucket) => count + Object.keys(bucket || {}).length, 0)
+    aiCache = {}
+    aiDirty = true
+    flush()
+    return removed
+  }
+
+  return { record, recordSamples, recordFromProxies, recordAiProbe, getAiForUrl, clearAiHistory, prune, get: () => cache, flush, updatedAt: () => updatedAt }
 }

@@ -22,6 +22,7 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
   let selections = {}
   let stats = { tested: 0, switched: 0, shared: 0 }
   let training = false
+  let resetting = false
   let modelStatus = { available: false, version: '', trainedAt: '', samples: 0, error: '' }
   const modelDir = `${paths.dataDir}/ai-optimizer`
   const modelPathForUrl = (url) => `${modelDir}/model-${createHash('sha256').update(url).digest('hex').slice(0, 16)}.txt`
@@ -55,6 +56,7 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
   }
 
   const updateModel = async () => {
+    if (resetting) return { ok: false, reason: 'optimizer-busy' }
     if (training) return { ok: false, reason: 'training-in-progress' }
     training = true
     const results = []
@@ -95,6 +97,29 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
     }
   }
 
+  const resetTrainingData = async () => {
+    if (resetting || training || inFlight) return { ok: false, reason: 'optimizer-busy' }
+    resetting = true
+    let removedModels = 0
+    try {
+      await loadConfig()
+      // Remove models first; if filesystem work fails, keep history intact for a safe retry.
+      for (const url of new Set(groups.map((group) => group.url))) {
+        const modelPath = modelPathForUrl(url)
+        for (const path of [modelPath, `${modelPath}.meta.json`]) {
+          if (await ctx.exists(path)) { await ctx.remove(path); removedModels++ }
+        }
+      }
+      const removedSamples = history.clearAiHistory?.() ?? 0
+      modelStatus = { available: false, version: '', trainedAt: '', samples: 0, error: '' }
+      return { ok: true, removedSamples, removedModels }
+    } catch (error) {
+      return { ok: false, reason: 'model-reset-failed', error: error instanceof Error ? error.message : String(error), removedModels }
+    } finally {
+      resetting = false
+    }
+  }
+
   const getModelStatus = async (url = '') => {
     const urls = url ? [url] : [...new Set(groups.map((group) => group.url))]
     const available = []
@@ -117,7 +142,7 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
   void loadConfig().then(() => getModelStatus()).catch(() => {})
 
   const tick = async () => {
-    if (inFlight) return { skipped: 'busy' }
+    if (resetting || inFlight) return { skipped: 'busy' }
     inFlight = true
     try {
       const profile = store.getProfile()
@@ -205,6 +230,19 @@ export const createAiOptimizer = ({ store, ctx, paths, history, coordinator, fet
     tick().catch(() => {})
   }
   const stop = () => { if (timer) clearInterval(timer); timer = null }
-  const status = () => ({ enabled: Boolean(store.getProfile().aiOptimizer?.enabled), groups: groups.map((g) => ({ tag: g.tag, url: g.url, members: g.members.length, selected: selections[g.tag] || '' })), lastRunAt, lastError, training, model: modelStatus, ...stats })
-  return { tick, start, stop, status, updateModel, _score: scoreNode, _summarize: summarizeNodeHistory }
+  const status = () => {
+    const profile = store.getProfile()
+    const minSamples = Math.min(10, Math.max(1, Number(profile.aiOptimizer?.minSamples) || 1))
+    const maxAgeMs = Math.max(1, Number(profile.aiOptimizer?.maxSampleAgeHours) || 168) * 3_600_000
+    return { enabled: Boolean(profile.aiOptimizer?.enabled), groups: groups.map((g) => {
+      const samples = history.getAiForUrl?.(g.url) || {}
+      const sampled = g.members.filter((name) => (samples[name] || []).some((sample) => {
+        const at = Date.parse(sample.time)
+        return Number.isFinite(at) && now() - at >= 0 && now() - at <= maxAgeMs
+      })).length
+      const ready = g.members.filter((name) => summarizeNodeHistory(samples[name], { now: now(), maxAgeMs }).samples >= minSamples && summarizeNodeHistory(samples[name], { now: now(), maxAgeMs }).failureRate < 1).length
+      return { tag: g.tag, url: g.url, members: g.members.length, selected: selections[g.tag] || '', sampled, ready }
+    }), lastRunAt, lastError, training, model: modelStatus, ...stats }
+  }
+  return { tick, start, stop, status, updateModel, resetTrainingData, _score: scoreNode, _summarize: summarizeNodeHistory }
 }

@@ -11,6 +11,7 @@ test('AI optimizer applies defaults and clamps invalid numeric values', () => {
   assert.equal(settings.intervalSeconds, 3600)
   assert.equal(settings.latencyWeight, 70)
   assert.equal(settings.asnPriority, false)
+  assert.equal(settings.probeConcurrency, 3)
 })
 
 test('AI optimizer accepts valid options without trusting truthy strings', () => {
@@ -20,5 +21,7 @@ test('AI optimizer accepts valid options without trusting truthy strings', () =>
   assert.equal(settings.sensitivityMs, 250)
   assert.equal(settings.collectTrainingData, true)
   assert.equal(settings.minSamples, 8)
+  assert.equal(normalizeAiOptimizerSettings({ probeConcurrency: 99 }).probeConcurrency, 8)
+  assert.equal(normalizeAiOptimizerSettings({ probeConcurrency: 0 }).probeConcurrency, 1)
   assert.equal(normalizeAiOptimizerSettings({ enabled: 'true' }).enabled, false)
 })

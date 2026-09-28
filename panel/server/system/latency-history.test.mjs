@@ -44,7 +44,28 @@ test('AI 探测历史按 URL 隔离，并与共享测速历史分开保存', () 
   assert.equal(JSON.stringify(saved).includes('one.invalid'), false)
 })
 
-test('从 /proxies 记:最新一条变了就记;有结果→没结果 = 内核测速超时,记 0;组按当时选中的节点记', () => {
+test('清空 AI 样本会只重置 AI 专用历史,保留共享测速历史', () => {
+  const store = memStore()
+  const h = createLatencyHistory({ store })
+  h.record('A', { time: at(0), delay: 90 })
+  h.recordAiProbe('A', 'https://one.invalid/ping', { time: at(1), delay: 100 })
+  h.flush()
+  assert.equal(h.clearAiHistory(), 1)
+  assert.deepEqual(h.getAiForUrl('https://one.invalid/ping'), {})
+  assert.deepEqual(h.get().A.map((sample) => sample.delay), [90])
+  assert.deepEqual(JSON.parse(store.raw.get('jbox/ai-latency-history')), {})
+})
+
+test('清空时没有 AI 样本返回零且不改共享测速历史', () => {
+  const store = memStore()
+  const h = createLatencyHistory({ store })
+  h.record('A', { time: at(0), delay: 90 })
+  h.flush()
+  assert.equal(h.clearAiHistory(), 0)
+  assert.deepEqual(h.get().A.map((sample) => sample.delay), [90])
+})
+
+ test('从 /proxies 记:最新一条变了就记;有结果→没结果 = 内核测速超时,记 0;组按当时选中的节点记', () => {
   const h = createLatencyHistory({ store: memStore() })
   h.recordFromProxies({ A: node([{ time: at(0), delay: 120 }]), B: node([{ time: at(0), delay: 80 }]), G: { all: ['A', 'B'], now: 'A', history: [] } }, { kernelStartedAt: T0 - 3_600_000, at: T0 })
   assert.deepEqual(h.get().A.map((s) => s.delay), [120])

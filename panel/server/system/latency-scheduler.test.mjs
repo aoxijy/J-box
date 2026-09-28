@@ -5,7 +5,7 @@ import { createPaths } from './paths.mjs'
 import { createLatencyHistory } from './latency-history.mjs'
 import { createProbeCoordinator } from './probe-coordinator.mjs'
 import {
-  createLatencyScheduler, parseDuration, leafNodesOf, collectProbeInterests, dedupeWindows, readUrltestGroups,
+  createLatencyScheduler, parseDuration, leafNodesOf, collectProbeInterests, dedupeWindows, readUrltestGroups, readProbeGroups,
 } from './latency-scheduler.mjs'
 
 const paths = createPaths('/opt/j-box')
@@ -46,9 +46,14 @@ const kernel = (proxies = proxiesFixture(), clock = () => T0) => {
   }
   return { proxies, calls, fetchImpl }
 }
-const ctxWithKernel = () => createMockContext({
-  files: { [paths.configPath]: JSON.stringify(config), '/proc/123/stat': '123 (sing-box) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 100 0', '/proc/uptime': '1000 0' },
-  execResults: { 'pidof sing-box': { code: 0, stdout: '123\n' } },
+const ctxWithKernel = ({ meta, runtimeConfig = config } = {}) => createMockContext({
+  files: {
+    [paths.configPath]: JSON.stringify(runtimeConfig),
+    ...(meta ? { [`${paths.etc}/config.meta.json`]: JSON.stringify(meta) } : {}),
+    '/proc/123/stat': '123 (sing-box) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 100 0',
+    '/proc/uptime': '1000 0',
+  },
+  execResults: { 'pidof sing-box': { code: 0, stdout: '123\\n' } },
 })
 
 test('parseDuration:sing-box 的时长写法', () => {
@@ -62,6 +67,22 @@ test('readUrltestGroups:只收 urltest 组,带出检测地址与间隔', () => {
   assert.deepEqual(groups.map((g) => g.tag), ['短周期', '长周期', '嵌套'])
   assert.equal(groups[0].intervalMs, 60_000)
   assert.equal(groups[1].intervalMs, 300_000)
+})
+
+test('readProbeGroups:AI selector 从元数据恢复组内候选与测速 URL,不跨组扩展', () => {
+  const aiConfig = { outbounds: [{ type: 'selector', tag: 'AI优选', outbounds: ['a', 'b'] }] }
+  const meta = { aiGroups: [{ tag: 'AI优选', url: 'https://ai.example/204', intervalMs: 60_000, members: ['a', 'b', 'outside'] }] }
+  const groups = readProbeGroups(aiConfig, meta)
+  assert.deepEqual(groups, [{ tag: 'AI优选', url: 'https://ai.example/204', intervalMs: 60_000, members: ['a', 'b'] }])
+  assert.equal(readProbeGroups(aiConfig, meta, 15_000)[0].intervalMs, 15_000, 'AI采样周期可由面板策略覆盖')
+  const interests = collectProbeInterests(groups, { a: { type: 'ss' }, b: { type: 'ss' }, c: { type: 'ss' } })
+  assert.deepEqual(interests.map(({ node, url }) => [node, url]), [['a', 'https://ai.example/204'], ['b', 'https://ai.example/204']])
+})
+
+test('readProbeGroups:保留普通 urltest 并避免重复读取同名 AI 组', () => {
+  const groups = readProbeGroups(config, { aiGroups: [{ tag: '短周期', url: 'https://other/204', members: ['b'] }] })
+  assert.equal(groups.length, 3)
+  assert.equal(groups[0].url, 'https://t/204')
 })
 
 test('leafNodesOf:成员是组(嵌套 URLTest)时展开成真实叶子节点', () => {
@@ -155,6 +176,51 @@ test('AI opt-in collects per-node, per-URL shared probe history', async () => {
   assert.equal(probeCalls.length, 2, 'must disregard untagged kernel history on the first URL-scoped sample')
   await s.tick()
   assert.equal(k.calls.filter((url) => url.includes('/delay?')).length, 2, 'fresh URL-scoped history is reused')
+})
+
+test('AI opt-in also samples selector candidates using config metadata', async () => {
+  const clock = T0
+  const k = kernel(proxiesFixture(), () => clock)
+  const store = memStore()
+  store.getProfile = () => ({ aiOptimizer: { collectTrainingData: true } })
+  const history = createLatencyHistory({ store, now: () => clock })
+  const runtimeConfig = { outbounds: [{ type: 'selector', tag: '自动优选', outbounds: ['a', 'b'] }] }
+  const meta = { aiGroups: [{ tag: '自动优选', url: 'https://ai.example/204', intervalMs: 60_000, members: ['a', 'b'] }] }
+  const s = createLatencyScheduler({ store, ctx: ctxWithKernel({ runtimeConfig, meta }), paths, history, coordinator: createProbeCoordinator({ store, fetchImpl: k.fetchImpl, now: () => clock }), fetchImpl: k.fetchImpl, now: () => clock, log: () => {} })
+  const result = await s.tick()
+  assert.deepEqual(result.tested.sort(), ['a', 'b'])
+  assert.deepEqual(history.getAiForUrl('https://ai.example/204').a.map((sample) => sample.delay), [99])
+  assert.deepEqual(history.getAiForUrl('https://ai.example/204').b.map((sample) => sample.delay), [99])
+  assert.equal(k.calls.filter((url) => url.includes('/delay?')).length, 2)
+})
+
+test('AI selector sampling honors the configured concurrent probe limit', async () => {
+  const clock = T0
+  const tags = Array.from({ length: 7 }, (_, i) => `candidate-${i}`)
+  const proxies = Object.fromEntries(tags.map(tag => [tag, { type: 'ss', history: [] }]))
+  let active = 0
+  let peak = 0
+  const fetchImpl = async (url) => {
+    if (String(url).endsWith('/proxies')) return { ok: true, status: 200, json: async () => ({ proxies }) }
+    if (String(url).includes('/delay?')) {
+      active++
+      peak = Math.max(peak, active)
+      await new Promise(resolve => setTimeout(resolve, 10))
+      active--
+      return { ok: true, status: 200, json: async () => ({ delay: 80 }) }
+    }
+    throw new Error(`unexpected URL: ${url}`)
+  }
+  const store = memStore()
+  store.getProfile = () => ({ aiOptimizer: { collectTrainingData: true, probeConcurrency: 2 } })
+  const history = createLatencyHistory({ store, now: () => clock })
+  const runtimeConfig = { outbounds: [{ type: 'selector', tag: '自动优选', outbounds: tags }] }
+  const meta = { aiGroups: [{ tag: '自动优选', url: 'https://ai.example/204', intervalMs: 60_000, members: tags }] }
+  const scheduler = createLatencyScheduler({ store, ctx: ctxWithKernel({ runtimeConfig, meta }), paths, history, coordinator: createProbeCoordinator({ store, fetchImpl, now: () => clock }), fetchImpl, now: () => clock, log: () => {} })
+  const result = await scheduler.tick()
+  assert.equal(result.tested.length, tags.length)
+  assert.ok(peak > 1, `expected concurrent probes, peak=${peak}`)
+  assert.ok(peak <= 2, `probe concurrency exceeded configured limit: peak=${peak}`)
 })
 
 test('sync:只读 /proxies,不发起任何测速', async () => {

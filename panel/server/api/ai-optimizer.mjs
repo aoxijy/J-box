@@ -11,5 +11,9 @@ export const registerAiOptimizerRoutes = (app, { optimizer } = {}) => {
     const result = await optimizer.updateModel()
     res.status(result.ok || result.reason === 'insufficient-observed-transitions' ? 200 : 503).json(result)
   })
+  router.post('/ai-optimizer/training/reset', async (_req, res) => {
+    const result = await optimizer.resetTrainingData()
+    res.status(result.ok ? 200 : result.reason === 'optimizer-busy' ? 409 : 500).json(result)
+  })
   app.use('/api/jbox', router)
 }

@@ -9,6 +9,7 @@ export interface AiOptimizerSettings {
   latencyWeight: number
   reliabilityWeight: number
   jitterWeight: number
+  probeConcurrency: number
   intervalSeconds: number
 }
 export const AI_OPTIMIZER_DEFAULTS: Readonly<AiOptimizerSettings>

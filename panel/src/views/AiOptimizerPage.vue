@@ -69,10 +69,19 @@
             <span class="label-text text-sm">{{ $t('aiProbeInterval') }}</span>
             <input v-model.number="settings.intervalSeconds" type="number" min="15" max="3600" step="15" class="input input-bordered input-sm w-36" @change="save()" />
           </label>
+          <label class="form-control gap-1">
+            <span class="label-text text-sm">{{ $t('aiProbeConcurrency') }} ({{ settings.probeConcurrency }})</span>
+            <input v-model.number="settings.probeConcurrency" type="number" min="1" max="8" step="1" class="input input-bordered input-sm w-36" @change="save()" />
+            <span class="text-xs text-base-content/60">{{ $t('aiProbeConcurrencyHint') }}</span>
+          </label>
+          <div class="alert alert-info py-2 text-xs">{{ $t('aiSelectorExplanation') }}</div>
           <div class="alert alert-info py-2 text-xs">{{ status.model?.available ? $t('aiModelTrained', { samples: status.model.samples, trainedAt: status.model.trainedAt }) : $t('aiTrainingNotReady') }}</div>
-          <button class="btn btn-primary btn-sm self-start" :disabled="busy || status.training || !settings.collectTrainingData" @click="updateModel">
-            {{ status.training ? $t('aiTrainingInProgress') : $t('aiUpdateModel') }}
-          </button>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn btn-primary btn-sm" :disabled="busy || status.training || !settings.collectTrainingData" @click="updateModel">
+              {{ status.training ? $t('aiTrainingInProgress') : $t('aiUpdateModel') }}
+            </button>
+            <button class="btn btn-outline btn-sm" :disabled="busy || status.training" @click="resetTrainingData">{{ $t('aiResetSamples') }}</button>
+          </div>
         </div>
       </section>
       <section class="card border border-base-300/60 bg-base-100 xl:col-span-2">
@@ -88,6 +97,7 @@
             <div v-for="group in status.groups" :key="group.tag" class="rounded-box border border-base-300/60 p-3 text-sm">
               <div class="font-medium">{{ group.tag }}</div>
               <div class="mt-1 text-xs text-base-content/60">{{ group.members }} nodes · {{ group.selected || '—' }}</div>
+              <div class="mt-1 text-xs">{{ $t('aiGroupCoverage', { sampled: group.sampled ?? 0, members: group.members, ready: group.ready ?? 0 }) }}</div>
             </div>
           </div>
           <p v-if="status.lastError" class="text-sm text-error">{{ status.lastError }}</p>
@@ -98,11 +108,14 @@
 </template>
 
 <script setup lang="ts">
-import { deployNow, fetchAiOptimizerStatus, fetchProfile, runAiOptimizerNow, updateAiOptimizerModel, saveProfile, type JBoxProfile, type JBoxAiOptimizerStatus } from '@/api/jbox'
+import { deployNow, fetchAiOptimizerStatus, fetchProfile, runAiOptimizerNow, updateAiOptimizerModel, clearAiHistory, saveProfile, type JBoxProfile, type JBoxAiOptimizerStatus } from '@/api/jbox'
 import { AI_OPTIMIZER_DEFAULTS, normalizeAiOptimizerSettings } from '@/helper/ai-optimizer-settings.mjs'
 import { usePaddingForViews } from '@/composables/paddingViews'
 import { showNotification } from '@/helper/notification'
 import { onMounted, reactive, ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const { padding } = usePaddingForViews({ offsetTop: 0, offsetBottom: 0 })
 const busy = ref(false)
@@ -156,6 +169,18 @@ const updateModel = async () => {
       params: { samples: String(result.samples ?? 0), required: String(result.required ?? 32) },
       type: result.ok ? 'alert-success' : 'alert-warning',
     })
+  } catch (error) {
+    showNotification({ content: 'routeTestRequestFailed', params: { message: error instanceof Error ? error.message : String(error) }, type: 'alert-error' })
+  } finally { busy.value = false }
+}
+
+const resetTrainingData = async () => {
+  if (busy.value || status.training || !window.confirm(t('aiResetConfirm'))) return
+  busy.value = true
+  try {
+    const result = await clearAiHistory()
+    await refreshStatus()
+    showNotification({ content: 'aiSamplesReset', params: { samples: String(result.removedSamples), models: String(result.removedModels) }, type: 'alert-success' })
   } catch (error) {
     showNotification({ content: 'routeTestRequestFailed', params: { message: error instanceof Error ? error.message : String(error) }, type: 'alert-error' })
   } finally { busy.value = false }

@@ -220,6 +220,7 @@ export interface JBoxProfile {
     latencyWeight?: number
     reliabilityWeight?: number
     jitterWeight?: number
+    probeConcurrency?: number
     intervalSeconds?: number
   }
   rulesetDir?: string
@@ -1165,10 +1166,11 @@ export const fetchTerminalCapability = () => requestJson<JBoxTerminalCapability>
 export const testTerminal = (target: string, port?: number) =>
   requestJson<JBoxTerminalTest>('/api/jbox/terminal-test', { method: 'POST', body: JSON.stringify({ target, port }) })
 
-export type JBoxAiOptimizerStatus = { enabled: boolean; groups: { tag: string; url: string; members: number; selected: string }[]; lastRunAt: number; lastError: string; tested: number; switched: number; shared: number; training?: boolean; model?: { available: boolean; version: string; trainedAt: string; samples: number; error: string } }
+export type JBoxAiOptimizerStatus = { enabled: boolean; groups: { tag: string; url: string; members: number; selected: string; sampled?: number; ready?: number }[]; lastRunAt: number; lastError: string; tested: number; switched: number; shared: number; training?: boolean; model?: { available: boolean; version: string; trainedAt: string; samples: number; error: string } }
 export const fetchAiOptimizerStatus = () => requestJson<JBoxAiOptimizerStatus>('/api/jbox/ai-optimizer/status')
 export const runAiOptimizerNow = () => requestJson<{ enabled: boolean; groups?: number; tested?: number; switched?: number; shared?: number; error?: string }>('/api/jbox/ai-optimizer/run', { method: 'POST' })
 export const updateAiOptimizerModel = () => requestJson<{ ok: boolean; reason?: string; error?: string; version?: string; samples?: number; required?: number; trainedAt?: string; models?: number }>('/api/jbox/ai-optimizer/model/update', { method: 'POST' })
+export const clearAiHistory = () => requestJson<{ ok: boolean; removedSamples: number; removedModels: number }>('/api/jbox/ai-optimizer/training/reset', { method: 'POST', body: '{}' })
 
 // ---- 延迟历史(server/api/latency-history.mjs):每个节点最近 10 次测速结果,服务端记、所有浏览器共享
 // node:组的样本带当时选中的节点;节点自己的样本没有
