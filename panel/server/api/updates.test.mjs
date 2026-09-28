@@ -47,6 +47,13 @@ test('fetchLatestVersion:direct response URL is not mistaken for the final relea
   )
 })
 
+test('fetchLatestVersion:direct response URL is not mistaken for the final release tag', async () => {
+  await assert.rejects(
+    () => fetchLatestVersion(async (url) => ({ status: 200, headers: new Map(), url }), { mirrors: [] }),
+    /没能取到最新版本号/,
+  )
+})
+
 test('GET /update/status + POST /update/run:读 meta/通道/状态文件,发起时调 update.sh --detach --mirror', async () => {
   const ctx = createMockContext({
     files: {
