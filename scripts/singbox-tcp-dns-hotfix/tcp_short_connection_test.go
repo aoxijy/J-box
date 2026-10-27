@@ -60,7 +60,7 @@ func TestJBoxTCPDNSAfterSilentIdle(t *testing.T) {
 		}
 	}()
 	transport := newTestTCPTransport(t, listener)
-	defer transport.Close()
+	defer transport.multiplexer.Close()
 	for i, qType := range []uint16{mDNS.TypeA, mDNS.TypeAAAA, mDNS.TypeHTTPS} {
 		if i == 1 {
 			time.Sleep(40 * time.Millisecond)
@@ -123,7 +123,7 @@ func TestJBoxTCPDNSCancellationClosesConnection(t *testing.T) {
 		conn.Read(b[:])
 	}()
 	transport := newTestTCPTransport(t, listener)
-	defer transport.Close()
+	defer transport.multiplexer.Close()
 	message := new(mDNS.Msg)
 	message.SetQuestion("timeout.example.", mDNS.TypeA)
 	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
