@@ -682,7 +682,7 @@ const en = {
   iconCategoryBrands: 'Brands',
   iconCategoryMisc: 'Other',
   subscriptionRenameCountryNoMatch: 'No matching country/region',
-  subscriptionRenamePrefixLabel: 'Prefix node names with the subscription name (e.g. "Airport {sep} HK-01")',
+  subscriptionRenamePrefixLabel: 'Prefix node names with the subscription name (e.g. "GQRU-Airport {sep} HK-01")',
   subscriptionRenameDisabledHint: 'Off: nodes keep the provider’s original names; regions are still detected by keyword for flags and region-based groups.',
   subscriptionRenameTokensHint: 'Drag to reorder:',
   subscriptionRenameUnknownLabel: 'Label for unrecognized region',

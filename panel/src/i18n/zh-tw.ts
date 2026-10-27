@@ -678,7 +678,7 @@ const zhTW: LANG_MESSAGE = {
   iconCategoryBrands: '公司',
   iconCategoryMisc: '其他',
   subscriptionRenameCountryNoMatch: '沒有符合的國家/地區',
-  subscriptionRenamePrefixLabel: '節點名前加訂閱名(如「機場名稱 {sep} 香港-01」)',
+  subscriptionRenamePrefixLabel: '節點名前加訂閱名(如「GQRU-機場名稱 {sep} 香港-01」)',
   subscriptionRenameDisabledHint: '已關閉:節點保留機場的原始名字;地區仍按關鍵詞識別,用於國旗和按地區選成員。',
   subscriptionRenameTokensHint: '拖曳排序:',
   subscriptionRenameUnknownLabel: '\u7121\u6cd5\u8b58\u5225\u5730\u5340\u6642\u7684\u6a19\u7c64',

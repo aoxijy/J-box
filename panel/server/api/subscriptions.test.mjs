@@ -556,7 +556,7 @@ test('开了订阅名前缀时,改名字必须重新解析(否则节点上挂着
     const created = await (await postJson(baseUrl, '/api/jbox/subscriptions', {
       url: 'https://sub.example.com/x', name: '旧名字', renameOptions: { usePrefix: true },
     })).json()
-    assert.ok(store.getNodes().every((n) => n.tag.startsWith('旧名字 | ')), '建好时就该带前缀')
+    assert.ok(store.getNodes().every((n) => n.tag.startsWith('GQRU-旧名字 | ')), '建好时就该带前缀')
 
     const res = await fetch(`${baseUrl}/api/jbox/subscriptions/${created.id}`, {
       method: 'PATCH',
@@ -565,7 +565,7 @@ test('开了订阅名前缀时,改名字必须重新解析(否则节点上挂着
     })
     assert.equal(res.status, 200)
     assert.equal(fetchCount, 2, '名字即前缀,改名等于改所有节点名,必须重新解析')
-    assert.ok(store.getNodes().every((n) => n.tag.startsWith('新名字 | ')), '前缀要跟着新名字走')
+    assert.ok(store.getNodes().every((n) => n.tag.startsWith('GQRU-新名字 | ')), '前缀要跟着新名字走')
   } finally {
     await close()
   }

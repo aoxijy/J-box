@@ -136,7 +136,7 @@ export const subscriptionRenameOptions = (options, name) => {
   const raw = options && typeof options === 'object' ? options : undefined
   const base = raw ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== 'prefix')) : undefined
   const effective = base && base.usePrefix && typeof name === 'string' && name.trim()
-    ? { ...base, prefix: name.trim() }
+    ? { ...base, prefix: `GQRU-${name.trim().replace(/^GQRU-/i, '')}` }
     : base
   return { base, effective }
 }

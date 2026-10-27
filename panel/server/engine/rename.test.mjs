@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { DEFAULT_REGION_DICT, DEFAULT_FEATURE_KEYWORDS, matchRegion, extractFeatures, renameNodes, previewRename, excludeNodes, isExcludedName } from './rename.mjs'
+import { DEFAULT_REGION_DICT, DEFAULT_FEATURE_KEYWORDS, subscriptionRenameOptions, matchRegion, extractFeatures, renameNodes, previewRename, excludeNodes, isExcludedName } from './rename.mjs'
 import { createNode } from './node-model.mjs'
 
 const mk = (name) => createNode({ tag: name, type: 'trojan', server: 'a.com', server_port: 443, fields: { password: 'x', tls: { enabled: true } }, source: 'sharelink' })
@@ -366,4 +366,11 @@ test('亚洲和其他关键词命中,重命名后保留彩色地球图标代码'
   assert.ok(asia.keywords.includes('🇯🇵') && asia.keywords.includes('US'))
   const node = renameNodes([mk('埼玉-01')])[0]
   assert.equal(node.regionCode, 'globe:earth-asia')
+})
+
+test('订阅名前缀默认带 GQRU-,已有前缀不重复,关闭时不添加', () => {
+  const options = subscriptionRenameOptions({ usePrefix: true }, '机场名称').effective
+  assert.equal(renameNodes([mk('香港01')], options)[0].tag, 'GQRU-机场名称 | 香港-01')
+  assert.equal(subscriptionRenameOptions({ usePrefix: true }, 'GQRU-机场名称').effective.prefix, 'GQRU-机场名称')
+  assert.equal(subscriptionRenameOptions({ usePrefix: false }, '机场名称').effective.prefix, undefined)
 })
