@@ -22,7 +22,7 @@ jobs:
       - name: Test stable release selection and failure handling
         run: python3 scripts/singbox-tcp-dns-hotfix/test_resolve_latest.py
       - name: Test LuCI compatible-kernel candidates
-        run: node --test scripts/luci-*.test.cjs
+        run: node --test scripts/luci-*.test.cjs scripts/easytier-compat.test.cjs
       - name: Resolve official stable release once for all architectures
         env:
           GITHUB_TOKEN: ${{ github.token }}

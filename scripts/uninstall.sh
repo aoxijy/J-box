@@ -131,6 +131,10 @@ fi
 
 # ---------- 删除 init 脚本与 LuCI 三文件 ----------
 info "删除 init 脚本与 LuCI 文件..."
+if [ -f /etc/init.d/easytier ]; then
+  sed -i 's@/usr/libexec/jbox-easytier-core "${easytierbin}"@${easytierbin}@g' /etc/init.d/easytier
+fi
+rm -f /usr/libexec/jbox-easytier-core
 rm -f /etc/init.d/jbox /etc/init.d/jbox-panel
 rm -f /www/luci-static/resources/view/jbox/status.js
 # 目录本身也要删:留着一个空的 jbox/ 目录既不干净,也会让人误以为还装着。
