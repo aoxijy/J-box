@@ -435,6 +435,10 @@ if [ ! -f "$_ACL_DST" ] || ! cmp -s "$_ACL_SRC" "$_ACL_DST"; then
   _acl_changed=1
 fi
 cp "$_ACL_SRC" "$_ACL_DST" || die "无法安装 rpcd ACL 文件。"
+# LuCI static assets must be readable by uhttpd regardless of archive mode or caller umask.
+chmod 755 /www/luci-static/resources/view/jbox /usr/share/luci/menu.d /usr/share/rpcd/acl.d || die "无法修复 LuCI 目录权限。"
+chmod 644 /www/luci-static/resources/view/jbox/status.js /usr/share/luci/menu.d/luci-app-jbox.json /usr/share/rpcd/acl.d/luci-app-jbox.json || die "无法修复 LuCI 文件权限。"
+
 
 # 不清缓存的话,新菜单/视图不会立即生效(P5 review 记录过的坑);这一步与 ACL 无关,
 # 无条件做。

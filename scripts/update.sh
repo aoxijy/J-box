@@ -1211,6 +1211,10 @@ if [ ! -f "$_ACL_DST" ] || ! cmp -s "$_ACL_SRC" "$_ACL_DST"; then
   _acl_changed=1
 fi
 cp "$_ACL_SRC" "$_ACL_DST" || warn "无法安装 rpcd ACL 文件(不影响面板本身,LuCI 页面可能是旧的)。"
+# LuCI static assets must be readable by uhttpd regardless of archive mode or caller umask.
+chmod 755 /www/luci-static/resources/view/jbox /usr/share/luci/menu.d /usr/share/rpcd/acl.d || warn "无法修复 LuCI 目录权限。"
+chmod 644 /www/luci-static/resources/view/jbox/status.js /usr/share/luci/menu.d/luci-app-jbox.json /usr/share/rpcd/acl.d/luci-app-jbox.json || warn "无法修复 LuCI 文件权限。"
+
 
 # 用 -rf 而不是 -f:OpenWrt <=22.03 的 Lua 版 LuCI 里 /tmp/luci-modulecache 是
 # 目录,rm -f 对目录返回非零,在 set -eu 下会直接中止脚本(P6 终审 Important 4)。

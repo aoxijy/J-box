@@ -337,6 +337,10 @@ log "sing-box 静态链接校验通过($ARCH)。"
 log "拷贝 openwrt/ init 与 LuCI 文件..."
 cp -R "$ROOT/openwrt/initd" "$STAGE/openwrt/initd"
 cp -R "$ROOT/openwrt/luci" "$STAGE/openwrt/luci"
+# Normalize public LuCI assets before checksums and component packaging.
+find "$STAGE/openwrt/luci" -type d -exec chmod 755 {} +
+find "$STAGE/openwrt/luci" -type f -exec chmod 644 {} +
+
 
 # ---- 8b. 卸载脚本 ----
 # 随产物一起铺到 /opt/j-box/uninstall.sh:LuCI 兜底页要能在「面板已经坏了、
