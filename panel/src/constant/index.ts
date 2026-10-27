@@ -300,7 +300,6 @@ export enum SETTINGS_TAB {
   routing = 'routing',
   clients = 'clients',
   dns = 'dns',
-  aiOptimizer = 'aiOptimizer',
   kernel = 'kernel',
   share = 'share',
 }

@@ -2,7 +2,6 @@ export const createPaths = (root = '/opt/j-box') => ({
   root,
   bin: `${root}/bin`,
   singbox: `${root}/bin/sing-box`,
-  lightgbm: `${root}/panel/server/bin/lightgbm`,
   etc: `${root}/etc`,
   configPath: `${root}/etc/config.json`,
   // 共享网络的自签证书(system/tls-keypair.mjs)

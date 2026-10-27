@@ -38,7 +38,6 @@ import { computed, ref } from 'vue'
 import { activeConnections } from './connections'
 import {
   automaticDisconnection,
-  customTestUrl,
   groupTestUrls,
   iconReflectList,
   independentLatencyTest,
@@ -49,8 +48,6 @@ import {
 } from './settings'
 import { initSmartWeights } from './smart'
 import { loadLatencyHistory, reportLatencyTimeouts, syncLatencyHistory } from '@/store/latencyHistory'
-import { CUSTOM_TEST_URL_TOKEN } from '@/constant/testUrls'
-import { planLatencyTests } from '@/helper/latency-test-plan'
 
 export const proxiesFilter = ref('')
 export const proxiesTabShow = useStorage<PROXY_TAB_TYPE>(
@@ -167,28 +164,15 @@ const speedtestUrlWithDefault = computed(() => {
   return speedtestUrl.value || TEST_URL
 })
 
-// 分组在「节点管理」里填了测速地址就以它为准(和内核里 url-test 用的那条一致);
-// 'custom' 是哨兵值,指「后端设置 → 测速地址」里的自定义地址(见 constant/testUrls.ts,
-// 服务端 engine/test-url.mjs 用同一套解析)。都没填才回落全局地址。
 export const getTestUrl = (groupName?: string) => {
-  if (groupName) {
-    const groupTestUrl = groupTestUrls.value.find((item) => item.name === groupName)
-    if (groupTestUrl?.url) {
-      return groupTestUrl.url
-    }
-
-    const group = managedOutbounds.value.find((item) => item.name === groupName)
-    const raw = (group?.testUrl || '').trim()
-    if (raw === CUSTOM_TEST_URL_TOKEN) {
-      return customTestUrl.value || speedtestUrlWithDefault.value
-    }
-    if (raw) {
-      return raw
-    }
-  }
-
   if (!groupName || !independentLatencyTest.value) {
     return speedtestUrlWithDefault.value
+  }
+
+  const groupTestUrl = groupTestUrls.value.find((item) => item.name === groupName)
+
+  if (groupTestUrl) {
+    return groupTestUrl.url
   }
 
   const proxyNode =
@@ -804,23 +788,15 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
 
 export const allProxiesLatencyTest = async () => {
   if (independentLatencyTest.value) {
-    // 批量测速按测速 URL 分桶,同一 URL 的策略组共享一轮节点结果。
-    // CHATGPT 的节点单独用它的专用 URL 测,并从其余 URL 的共测池排除,避免重复测速 / 覆盖专用结果。
-    const batches = planLatencyTests(proxyGroupList.value.map((name) => ({
-      name,
-      url: getTestUrl(name),
-      members: proxyMap.value[name]?.all ?? [],
-    }))).filter((batch) => batch.nodes.length > 0)
     const limit = pLimit(3)
-    return Promise.all(batches.map((batch) => limit(() =>
-      testLatencyOneByOneWithTip(
-        batch.groups[0] || 'all',
-        batch.nodes,
-        batch.url,
-        batch.groups.join('、'),
-        `bulk:${batch.url}`,
+
+    return await Promise.all(
+      proxyGroupList.value.map((proxyGroupName) =>
+        limit(async () => {
+          await proxyGroupLatencyTest(proxyGroupName)
+        }),
       ),
-    )))
+    )
   }
 
   const proxyNode = Object.keys(proxyMap.value).filter((proxy) => !isProxyGroup(proxy))

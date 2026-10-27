@@ -1,23 +1,14 @@
-// 自动组的定时探测调度:按组配置的 interval 探测到点的**真实叶子节点**,结果交给
-// system/probe-coordinator.mjs 在自动优选与故障转移之间共享。
+// 自动组的硬性定时测速。
 //
-// 为什么不再自己发 /proxies/:tag/delay 就完事:
-//   · 内核每收到一次节点测速,就会对所有包含该节点的 URLTest 组重跑一次择优
-//     (PerformUpdateCheck)。所以"探测谁、什么时候探"必须先算清楚,否则共享节点会被
-//     反复探测、顺带把每个组都重选一遍,用户设的间隔完全不起作用。
-//   · 一个组的成员可能是另一个组(嵌套 URLTest)。检测间隔要落到真实叶子节点上算,
-//     否则"外层的组标签"和内层的叶子会被当成两个不同的目标各测一遍。
+// sing-box 的 URLTest 组是"懒惰"的:interval 只在这个组有流量经过时才起作用——启动时测一遍,
+// 之后只有连接真正经过它才启动定时器,超过 idle_timeout 没流量又停掉。闲置的组永远停在启动
+// 那一次结果上,用户设的检测间隔在没流量时不成立。这里由面板服务端按 interval 严格
+// 定时:每 tick 看一眼每个 urltest 组最近一轮是什么时候(自己记的,或者成员里最新的一条——
+// 内核启动自测、有流量时内核自己测都算),到点就调内核的组测速接口把这组测一遍。
 //
-// 这里做三件事:
-//   1. 读内核配置里的 urltest 组 → 把成员展开成真实叶子节点(嵌套组递归);
-//   2. 每个「节点 + 测速地址」算出**用到它的所有组里最短的 interval**(共享节点的实际
-//      探测周期),到点的交给协调器探测;协调器里已经有比它新的结果就直接复用(长周期组
-//      到点时吃短周期组刚测出来的那份);
-//   3. 探测用 force=false 请求内核(见 singbox-tcp-dns-hotfix/urltest-force.patch):
-//      内核 history 还新鲜就把已有结果还回来,不重测也不重选。
-//
-// 手动测速不走这条路:面板"测速"按钮 / 订阅页一键测速有自己的强制语义(立即真测),
-// 结果由 api/latency-history.mjs 的 sync 回流。
+// 内核那个接口是 force=false 的:最近 interval 内测过的成员会被跳过,所以几个组共用的节点
+// 每个 interval 只测一次,代价 = 节点数,不是组数 × 节点数。测完再读一次 /proxies:有新结果
+// 的记进延迟历史;这轮该测(结果比 interval 老或本来就没有)却仍没有结果的成员就是超时,记 0。
 import { CLASH_API_BASE } from '../api/penetration.mjs'
 import { processUptime } from './service.mjs'
 import { parseDuration } from '../engine/duration.mjs'
@@ -27,6 +18,12 @@ import { kernelTestUrl } from '../engine/test-url.mjs'
 export { parseDuration }
 
 const DEFAULT_INTERVAL_MS = 300_000
+const latestTime = (proxy) => {
+  const history = proxy && Array.isArray(proxy.history) ? proxy.history : []
+  const last = history[history.length - 1]
+  const t = last ? Date.parse(last.time) : NaN
+  return Number.isFinite(t) ? t : 0
+}
 
 const withTimeout = async (fetchImpl, url, init, timeoutMs) => {
   const controller = new AbortController()
@@ -38,108 +35,14 @@ const withTimeout = async (fetchImpl, url, init, timeoutMs) => {
   }
 }
 
-const mapLimit = async (items, concurrency, fn) => {
-  let cursor = 0
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (cursor < items.length) {
-      const item = items[cursor++]
-      await fn(item)
-    }
-  })
-  await Promise.all(workers)
-}
-
-// 一个成员可能是节点,也可能是另一个组(嵌套 URLTest):按 all 递归展开成真实叶子节点。
-// 组里带环(不该出现,生成配置时就挡了)时靠 seen 兜底。
-export const leafNodesOf = (tag, proxies, seen = new Set()) => {
-  const p = proxies && proxies[tag]
-  if (!p || typeof p !== 'object') return []
-  if (Array.isArray(p.all) && p.all.length) {
-    if (seen.has(tag)) return []
-    seen.add(tag)
-    const out = []
-    for (const m of p.all) out.push(...leafNodesOf(m, proxies, seen))
-    return out
-  }
-  return [tag]
-}
-
-// 组定义(内核配置里的 urltest 组):tag / 检测地址 / interval / 成员
-export const readUrltestGroups = (config) => (Array.isArray(config && config.outbounds) ? config.outbounds : [])
-  .filter((o) => o && o.type === 'urltest' && o.tag && !isInternalTag(o.tag))
-  .map((o) => ({
-    tag: o.tag,
-    url: kernelTestUrl(o.url || ''),
-    intervalMs: parseDuration(o.interval) || DEFAULT_INTERVAL_MS,
-    members: Array.isArray(o.outbounds) ? o.outbounds : [],
-  }))
-
-// AI 接管后用户自动组在内核配置中变为 selector,不再是 urltest。
-// 其测速目标和严格成员范围由 deploy-runner 同次生成的 config.meta.json.aiGroups 保存。
-// 把这份映射并入探测兴趣表,否则 collectTrainingData=true 时不会给 AI 组候选持续采样。
-export const readProbeGroups = (config, meta = {}, aiIntervalMs = 0) => {
-  const standard = readUrltestGroups(config)
-  const seen = new Set(standard.map((group) => group.tag))
-  const outbounds = Array.isArray(config?.outbounds) ? config.outbounds : []
-  const ai = (Array.isArray(meta?.aiGroups) ? meta.aiGroups : [])
-    .filter((g) => g && typeof g.tag === 'string' && g.tag && typeof g.url === 'string' && g.url && Array.isArray(g.members))
-    .filter((g) => !seen.has(g.tag))
-    .map((g) => {
-      const selector = outbounds.find((outbound) => outbound?.type === 'selector' && outbound.tag === g.tag)
-      if (!selector || !Array.isArray(selector.outbounds)) return null
-      const selectorMembers = new Set(selector.outbounds.filter((member) => typeof member === 'string' && member))
-      return {
-        tag: g.tag,
-        url: kernelTestUrl(g.url),
-        intervalMs: aiIntervalMs > 0 ? aiIntervalMs : (Number.isFinite(g.intervalMs) && g.intervalMs > 0 ? g.intervalMs : DEFAULT_INTERVAL_MS),
-        members: g.members.filter((member) => typeof member === 'string' && member && selectorMembers.has(member)),
-      }
-    })
-    .filter((group) => group && group.members.length > 0)
-  return [...standard, ...ai]
-}
-
-// 组 → 「节点 + 测速地址」的兴趣表。同一个键被多个组用到时,interval 取最短的那个:
-// 这就是"共享节点的实际探测周期 = 用到它的组里最短的 interval"。没有测速地址的组跳过。
-export const collectProbeInterests = (groups, proxies) => {
-  const interests = new Map()
-  for (const g of groups) {
-    if (!g.url || !g.members.length) continue
-    const leaves = new Set()
-    for (const m of g.members) for (const leaf of leafNodesOf(m, proxies)) leaves.add(leaf)
-    for (const leaf of leaves) {
-      const key = `${leaf}\u0000${g.url}`
-      const prev = interests.get(key)
-      if (!prev) interests.set(key, { key, node: leaf, url: g.url, intervalMs: g.intervalMs, groups: [g.tag] })
-      else {
-        prev.intervalMs = Math.min(prev.intervalMs, g.intervalMs)
-        if (!prev.groups.includes(g.tag)) prev.groups.push(g.tag)
-      }
-    }
-  }
-  return [...interests.values()]
-}
-
-// 延迟历史的去重窗口:节点用它所有组里最短的 interval,组用它自己的 interval。
-// 见 system/latency-history.mjs —— 同一节点在窗口内不再重复记一笔组记录。
-export const dedupeWindows = (groups, proxies) => {
-  const windows = new Map()
-  for (const g of groups) {
-    windows.set(g.tag, Math.max(windows.get(g.tag) || 0, g.intervalMs))
-    for (const m of g.members) {
-      for (const leaf of leafNodesOf(m, proxies)) {
-        const prev = windows.get(leaf)
-        windows.set(leaf, prev ? Math.min(prev, g.intervalMs) : g.intervalMs)
-      }
-    }
-  }
-  return windows
-}
-
 export const createLatencyScheduler = ({
-  store, ctx, paths, history, coordinator, fetchImpl = globalThis.fetch, now = () => Date.now(),
+  store, ctx, paths, history, fetchImpl = globalThis.fetch, now = () => Date.now(),
   tickMs = 30_000, testTimeoutMs = 5000, log = () => {},
 }) => {
+  // 每个成员上一次被我们发起的测试覆盖到的时刻。有结果的成员按内核记录的时间判"到点",
+  // 没结果的(超时的、从没测通的)内核那边没有时间,就按这个表判——否则它们每个 tick 都算到点,
+  // 每 30 秒被测一次,一个死节点一次 5 秒,白白占着并发。
+  const lastTested = new Map()
   const headers = () => {
     const secret = store.getClashSecret ? store.getClashSecret() : ''
     return secret ? { Authorization: `Bearer ${secret}` } : {}
@@ -155,71 +58,32 @@ export const createLatencyScheduler = ({
     return typeof uptime === 'number' ? now() - uptime * 1000 : null
   }
   const readGroups = async () => {
-    const config = JSON.parse(await ctx.readFile(paths.configPath))
-    let meta = {}
-    try { meta = JSON.parse(await ctx.readFile(`${paths.etc}/config.meta.json`)) } catch {}
-    const profile = store.getProfile?.() || {}
-    const aiInterval = profile.aiOptimizer?.intervalSeconds > 0 ? profile.aiOptimizer.intervalSeconds * 1000 : 0
-    if (profile.aiOptimizer?.collectTrainingData !== true) meta = { ...meta, aiGroups: [] }
-    return readProbeGroups(config, meta, aiInterval)
+    const cfg = JSON.parse(await ctx.readFile(paths.configPath))
+    // 故障转移的内部子组不在这里调度:它们的检测由 system/failover-manager.mjs 按父组的间隔统一做,两个调度器
+    // 不重复发起同一批检查
+    return (cfg.outbounds || [])
+      .filter((o) => o && o.type === 'urltest' && o.tag && !isInternalTag(o.tag))
+      // 保留组配置的检测地址；随包内核的 Clash API 和原生定时探测均支持 HTTP / HTTPS。
+      .map((o) => ({ tag: o.tag, url: kernelTestUrl(o.url || ''), intervalMs: parseDuration(o.interval) || DEFAULT_INTERVAL_MS, members: Array.isArray(o.outbounds) ? o.outbounds : [] }))
   }
 
-  // 只读一次 /proxies 把内核已经测出的结果记下来,不发起任何测速
-  // (面板手动测完 / 部署完之后调,新结果立刻进历史)
+  // 只读一次 /proxies 把看到的变化记下来,不发起测速(面板手动测完后调用,结果马上进历史)
   const sync = async () => {
     let proxies
     try { proxies = await fetchProxies() } catch { return false }
-    const kernelStartedAt = await kernelStart()
-    return history.recordFromProxies(proxies, { kernelStartedAt, at: now() })
+    return history.recordFromProxies(proxies, { kernelStartedAt: await kernelStart(), at: now() })
   }
 
-  let seeded = false
-  const runTick = async () => {
-    let proxies
-    try { proxies = await fetchProxies() } catch { return { skipped: 'kernel' } }
-    const kernelStartedAt = await kernelStart()
-    let groups
-    try { groups = await readGroups() } catch { return { skipped: 'config' } }
-    const windows = dedupeWindows(groups, proxies)
-    const dedupeMsOf = (name) => windows.get(name) || 0
-    history.recordFromProxies(proxies, { kernelStartedAt, at: now(), dedupeMsOf })
-
-    const interests = collectProbeInterests(groups, proxies)
-    // 面板刚起来(或刚重启完内核):先用内核 history 给协调器播种,不要立刻把每个节点重测一遍
-    if (!seeded) {
-      const n = coordinator ? coordinator.seedFromProxies(proxies, interests) : 0
-      seeded = true
-      if (n) log(`[latency] 用内核已有结果播种 ${n} 个节点,按各自间隔到点再测`)
-    }
-    const probed = []
-    if (coordinator) {
-      const probeConcurrency = Math.min(8, Math.max(1, Math.round(Number(store.getProfile?.()?.aiOptimizer?.probeConcurrency) || 3)))
-      await mapLimit(interests, probeConcurrency, async (it) => {
-        const collectForAi = (store.getProfile?.() || {}).aiOptimizer?.collectTrainingData === true && typeof history.recordAiProbe === 'function'
-        if (collectForAi) {
-          const samples = history.getAiForUrl?.(it.url)?.[it.node] || []
-          const latestAt = samples.reduce((latest, sample) => Math.max(latest, Date.parse(sample?.time) || 0), 0)
-          const age = now() - latestAt
-          if (latestAt > 0 && age >= 0 && age < it.intervalMs) return
-          // Kernel proxy history has no URL provenance; discard its seeded cache before collecting AI data.
-          coordinator.clear?.(it.node, it.url)
-        }
-        const r = await coordinator.probe(it.node, it.url, { intervalMs: it.intervalMs, timeoutMs: testTimeoutMs, force: false })
-        if (r && !r.cached) probed.push(it.node)
-        if (collectForAi && (r?.ok === true || r?.ok === false) && Number.isFinite(r.at) && Number.isFinite(r.delay)) {
-          history.recordAiProbe(it.node, it.url, { time: new Date(r.at).toISOString(), delay: r.ok ? r.delay : 0 })
-        }
-      })
-      history.flush?.()
-    }
-    // 测完重读一次:新结果立刻进历史(节点按自己最短的窗口去重,组按自己的间隔去重)
-    try { proxies = await fetchProxies() } catch { return { tested: probed, timeouts: [] } }
-    history.recordFromProxies(proxies, { kernelStartedAt, at: now(), dedupeMsOf })
-    return { tested: probed, timeouts: [] }
-  }
+  // 组测速请求的等待上限:内核最多 10 个并发、每个成员最多 testTimeout,按这轮真要测的成员数算,
+  // 再留 15 秒余量。不能设成固定 20 秒——内核用这个请求的 ctx 跑批测,请求一断后面的成员就
+  // 不测了(正式路由器「所有-自动」212 个成员,以前每轮只测到一半)。
+  const KERNEL_CONCURRENCY = 10
+  const MAX_ROUND_WAIT_MS = 5 * 60_000
+  const roundWaitMs = (dueCount) => Math.min(MAX_ROUND_WAIT_MS, Math.ceil(dueCount / KERNEL_CONCURRENCY) * testTimeoutMs + 15_000)
 
   let inFlight = false
   const tick = async () => {
+    // 上一轮还没跑完(大组一轮要一两分钟)就不叠着跑
     if (inFlight) return { skipped: 'busy' }
     inFlight = true
     try {
@@ -229,10 +93,66 @@ export const createLatencyScheduler = ({
     }
   }
 
+  const runTick = async () => {
+    let proxies
+    try { proxies = await fetchProxies() } catch { return { skipped: 'kernel' } }
+    const kernelStartedAt = await kernelStart()
+    history.recordFromProxies(proxies, { kernelStartedAt, at: now() })
+    let groups
+    try { groups = await readGroups() } catch { return { skipped: 'config' } }
+
+    const tested = []
+    const timeouts = []
+    for (const g of groups) {
+      if (!g.url || !g.members.length) continue
+      // 到点按成员算,不按组算:一个组里各成员上次测的时刻不一样(共用的成员可能刚被别的组测过,
+      // 一轮里靠后的成员比靠前的晚一分钟),谁到了 interval 谁就该测。每个组都按此刻最新的
+      // /proxies 判,前一个组刚测过的共用成员这里就不算到点。
+      // 内核的组测速是 force=false 的,没到 interval 的成员它自己会跳过,所以一次请求只测到点的。
+      const at = now()
+      const due = g.members.filter((m) => {
+        const t = latestTime(proxies[m])
+        // 内核的 /group/<tag>/delay 返回成功后,节点 history 可能还没在下一次
+        // /proxies 里反映出来。面板自己的记录必须和内核时间取较新者,否则同一轮
+        // 后面的共享组会读到旧 history,把同一个节点再测一次。
+        const since = Math.max(t, lastTested.get(m) || 0)
+        return !since || at - since >= g.intervalMs
+      })
+      if (!due.length) continue
+      let ok = false
+      try {
+        const res = await withTimeout(fetchImpl, `${CLASH_API_BASE}/group/${encodeURIComponent(g.tag)}/delay?url=${encodeURIComponent(g.url)}&timeout=${testTimeoutMs}`, { headers: headers() }, roundWaitMs(due.length))
+        ok = Boolean(res && res.ok)
+        if (!ok) log(`[latency] 组 ${g.tag} 定时测速返回 HTTP ${res ? res.status : 'none'}`)
+      } catch (err) {
+        log(`[latency] 组 ${g.tag} 定时测速请求失败:${err instanceof Error ? err.message : err}`)
+      }
+      tested.push(g.tag)
+      // 测完马上读一次:新结果立刻进历史,后面的组也按新数据判要不要测
+      try { proxies = await fetchProxies() } catch { break }
+      history.recordFromProxies(proxies, { kernelStartedAt, at: now() })
+      // 这轮该测却仍没有结果的成员就是超时。请求中途断掉的那轮不判:没测到的成员不是超时
+      if (ok) {
+        const time = new Date(at).toISOString()
+        const samples = []
+        for (const m of due) {
+          lastTested.set(m, at)
+          const p = proxies[m]
+          if (!p || typeof p !== 'object') continue
+          if (Array.isArray(p.all) && p.all.length) continue
+          if (!latestTime(p)) samples.push({ name: m, time, delay: 0 })
+        }
+        history.recordSamples(samples)
+        timeouts.push(...samples.map((x) => x.name))
+      }
+      log(`[latency] 定时测速 ${g.tag}:测 ${due.length} 个${ok ? '' : '(请求未完成)'}`)
+    }
+    return { tested, timeouts }
+  }
+
   let timer = null
   const start = () => {
     if (timer) return
-    tick().catch((err) => log(`[latency] 首轮测速失败:${err instanceof Error ? err.message : err}`))
     timer = setInterval(() => { tick().catch((err) => log(`[latency] tick 失败:${err instanceof Error ? err.message : err}`)) }, tickMs)
     if (typeof timer.unref === 'function') timer.unref()
   }

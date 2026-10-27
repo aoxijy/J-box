@@ -24,9 +24,6 @@ import { registerTrafficRoutes } from './api/traffic.mjs'
 import { registerLatencyHistoryRoutes } from './api/latency-history.mjs'
 import { createLatencyHistory } from './system/latency-history.mjs'
 import { createLatencyScheduler } from './system/latency-scheduler.mjs'
-import { createProbeCoordinator } from './system/probe-coordinator.mjs'
-import { createAiOptimizer } from './system/ai-optimizer-manager.mjs'
-import { registerAiOptimizerRoutes } from './api/ai-optimizer.mjs'
 import { createFailoverManager } from './system/failover-manager.mjs'
 import { createDnsRewriteServer } from './system/dns-rewrite-server.mjs'
 import { DNS_REWRITE_TAG, ensureDnsRewriteDefaults } from './engine/dns-rewrite.mjs'
@@ -38,7 +35,7 @@ import { registerServerRoutes } from './api/servers.mjs'
 import { registerBackupRoutes } from './api/backup.mjs'
 import { registerDiagnosticsRoutes } from './api/diagnostics.mjs'
 import { readMeta } from './system/updater.mjs'
-import { seedBundledRuleLists, seedDefaultStorage } from './system/seed-defaults.mjs'
+import { seedDefaultStorage } from './system/seed-defaults.mjs'
 import { runDeploy, fetchSelections, resolveSelections, regenerateIfPlanChanged } from './api/deploy-runner.mjs'
 import { flushDnsCache } from './system/dns-cache.mjs'
 import { startScheduler } from './system/scheduler.mjs'
@@ -52,7 +49,7 @@ import { createPaths } from './system/paths.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
-const distDir = process.env.ZASHBOARD_DIST_DIR || path.join(rootDir, 'dist')
+const distDir = path.join(rootDir, 'dist')
 const dataDir = path.join(rootDir, 'data')
 const dbPath = process.env.ZASHBOARD_DB_PATH || path.join(dataDir, 'zashboard.sqlite')
 const host = process.env.HOST || '0.0.0.0'
@@ -239,13 +236,6 @@ const revokeAccessSession = (id) => {
 // (与测试用的 createMockContext 同接口),两者都是无状态的纯对象/闭包,可安全全局复用。
 const jbPaths = createPaths(process.env.JBOX_ROOT || '/opt/j-box')
 const jbCtx = createRealContext()
-
-// 全新安装:把随包编好的规则集铺到 data/rulesets 并写状态,首次部署不必等外网下载
-try {
-  seedBundledRuleLists({ paths: jbPaths, log: (m) => console.log(m) })
-} catch (err) {
-  console.log(`[defaults] 预置规则集失败:${err instanceof Error ? err.message : err}`)
-}
 
 const parseStoredBoolean = (value) => {
   if (typeof value !== 'string') {
@@ -775,10 +765,7 @@ const relayControllerWebSocket = (clientSocket, request) => {
 }
 
 const app = express()
-// Node 的 HTTP 解析器默认只收 16KB 请求头(HPE_HEADER_OVERFLOW);面板挂在路由器上,
-// 又常被浏览器带着一大堆 Cookie / 代理请求头访问,放宽到 64KB。
-// 订阅那边的响应头限制见 system/insecure-fetch.mjs(同样是 64KB)。
-const server = http.createServer({ maxHeaderSize: 64 * 1024 }, app)
+const server = http.createServer(app)
 const websocketServer = new WebSocketServer({ noServer: true })
 
 // 分享订阅是 capability URL：拿到随机 token 的设备可直接读取订阅内容，不需要面板登录。
@@ -1146,16 +1133,11 @@ registerTrafficRoutes(app, { collector: trafficCollector, ctx: jbCtx, paths: jbP
 // interval 测,闲置的组停在启动那一次;这里由面板按 interval 定时调内核测,结果记进 jbox/latency-history,
 // 所有浏览器共享。和流量采集一样只在 startServer 里启动。
 const latencyHistory = createLatencyHistory({ store })
-// 节点探测协调器(system/probe-coordinator.mjs):自动优选的定时探测与故障转移的健康检查
-// 共用同一份结果,按「节点 + 测速地址」去重,避免共享节点在几秒内被两条链路各测一遍
-const probeCoordinator = createProbeCoordinator({ store, fetchImpl: globalThis.fetch })
-const latencyScheduler = createLatencyScheduler({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, coordinator: probeCoordinator, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
+const latencyScheduler = createLatencyScheduler({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
 registerLatencyHistoryRoutes(app, { history: latencyHistory, scheduler: latencyScheduler })
-const aiOptimizer = createAiOptimizer({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, coordinator: probeCoordinator, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
-registerAiOptimizerRoutes(app, { optimizer: aiOptimizer })
 // 故障转移组的后台主备管理(system/failover-manager.mjs):按 config.meta.json 里的运行映射定期端到端探测各页签
 // 的节点、组内先恢复、组间按顺序转移、主用恢复后切回、全部失败切兜底拒绝。跟随服务端生命周期,浏览器关了照样跑
-const failoverManager = createFailoverManager({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, coordinator: probeCoordinator, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
+const failoverManager = createFailoverManager({ store, ctx: jbCtx, paths: jbPaths, history: latencyHistory, fetchImpl: globalThis.fetch, log: (m) => console.log(m) })
 registerFailoverRoutes(app, { manager: failoverManager })
 // DNS 重写的应答服务(system/dns-rewrite-server.mjs):内核把命中重写源域名的查询交到 127.0.0.1:7854,这里按档案
 // 里此刻的规则生成答案;没命中的按直连侧上游(WAN 下发的 DNS)解析
@@ -1266,7 +1248,7 @@ if (fs.existsSync(distDir)) {
 
   app.get(/^(?!\/api\/).*/, (_req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
-    res.sendFile('index.html', { root: distDir })
+    res.sendFile(path.join(distDir, 'index.html'))
   })
 }
 
@@ -1320,7 +1302,6 @@ websocketServer.on('connection', relayControllerWebSocket)
 const startServer = async () => {
   trafficCollector.start()
   latencyScheduler.start()
-  aiOptimizer.start()
   failoverManager.start()
   dnsRewriteServer.start().catch(() => {})
   dnsFilterObserver.start()
@@ -1375,7 +1356,6 @@ const shutdownServer = async () => {
   // 先把攒着没写的流量增量落盘,再关库
   trafficCollector.stop()
   latencyScheduler.stop()
-  aiOptimizer.stop()
   failoverManager.stop()
   dnsRewriteServer.stop()
   clearInterval(dnsFilterTimer)
