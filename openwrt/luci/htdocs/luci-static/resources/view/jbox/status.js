@@ -33,6 +33,14 @@ var I18N = {
 		'Disable autostart': '关闭自启',
 		'Check for updates': '检查更新',
 		'Checking...': '检查中…',
+		'Official kernel: not checked': '官方内核：尚未检测',
+		'Official stable kernel: ': '官方稳定内核：',
+		' — installed base version unknown': '；当前基础版本未知',
+		' — newer upstream available; requires a compatible J-Box release': '；官方有新版，需通过 J-Box 兼容构建后升级',
+		' — installed base version is up to date': '；当前基础版本已跟上官方稳定版',
+		'Official kernel check failed; latest version unknown.': '官方内核检测失败，最新版本未知。',
+		'Check official kernel': '检测官方内核',
+		'J-Box package is up to date (official kernel checked separately).': 'J-Box 发布包已是最新（官方内核请单独检测）。',
 		'Up to date.': '已是最新版本。',
 		'New version available: %s': '有新版本:%s',
 		'Could not check (network unreachable or blocked).': '无法检查(网络不通或被拦截)。',
@@ -122,6 +130,14 @@ var I18N = {
 		'Disable autostart': '關閉自啟',
 		'Check for updates': '檢查更新',
 		'Checking...': '檢查中…',
+		'Official kernel: not checked': '官方内核：尚未检测',
+		'Official stable kernel: ': '官方稳定内核：',
+		' — installed base version unknown': '；当前基础版本未知',
+		' — newer upstream available; requires a compatible J-Box release': '；官方有新版，需通过 J-Box 兼容构建后升级',
+		' — installed base version is up to date': '；当前基础版本已跟上官方稳定版',
+		'Official kernel check failed; latest version unknown.': '官方内核检测失败，最新版本未知。',
+		'Check official kernel': '检测官方内核',
+		'J-Box package is up to date (official kernel checked separately).': 'J-Box 发布包已是最新（官方内核请单独检测）。',
 		'Up to date.': '已是最新版本。',
 		'New version available: %s': '有新版本:%s',
 		'Could not check (network unreachable or blocked).': '無法檢查(網路不通或被攔截)。',
@@ -345,6 +361,22 @@ function cmpVersion(a, b) {
 
 // 检查在浏览器里发起(而不是路由器),这样即便路由器本身还没配好代理也能查。
 // 网络受限时优雅失败,不影响页面其它功能。
+// Official upstream is separate from the J-Box package update channel.
+function checkOfficialKernel() {
+	var controller = new AbortController();
+	var timer = window.setTimeout(function () { controller.abort(); }, 12000);
+	return fetch('https://api.github.com/repos/SagerNet/sing-box/releases/latest', {
+		headers: { 'Accept': 'application/vnd.github+json' },
+		signal: controller.signal
+	}).then(function (r) {
+		if (!r.ok) throw new Error('HTTP ' + r.status);
+		return r.json();
+	}).then(function (j) {
+		if (j.draft || j.prerelease || !/^v\d+\.\d+\.\d+$/.test(j.tag_name || '')) throw new Error('Invalid stable release');
+		return j.tag_name;
+	}).finally(function () { window.clearTimeout(timer); });
+}
+
 function checkLatest() {
 	return fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
 		headers: { 'Accept': 'application/vnd.github+json' }
@@ -1341,6 +1373,23 @@ return view.extend({
 		// 同一套样式),不再单独占底部一行。
 		var versionResult = E('span', { 'class': 'ob-descr' }, '');
 
+		var kernelResult = E('span', { 'class': 'ob-descr' }, tr('Official kernel: not checked'));
+		var kernelCheckBtn = E('button', { 'class': 'cbi-button cbi-button-neutral',
+			'click': ui.createHandlerFn(self, function () {
+				kernelCheckBtn.disabled = true;
+				kernelResult.textContent = tr('Checking...');
+				return checkOfficialKernel().then(function (latest) {
+					var match = String(singboxVersion || '').match(/^(?:v)?(\d+\.\d+\.\d+)/);
+					var text = tr('Official stable kernel: ') + latest;
+					if (!match) text += tr(' — installed base version unknown');
+					else if (cmpVersion(latest, match[1]) > 0) text += tr(' — newer upstream available; requires a compatible J-Box release');
+					else text += tr(' — installed base version is up to date');
+					kernelResult.textContent = text;
+				}).catch(function () {
+					kernelResult.textContent = tr('Official kernel check failed; latest version unknown.');
+				}).finally(function () { kernelCheckBtn.disabled = false; });
+			}) }, tr('Check official kernel'));
+
 		var latestAvailable = null;
 
 		var checkBtn = E('button', { 'class': 'cbi-button cbi-button-neutral',
@@ -1361,7 +1410,7 @@ return view.extend({
 						showUpdateDialog(latest);
 						return;
 					}
-					versionResult.textContent = tr('Up to date.');
+					versionResult.textContent = tr('J-Box package is up to date (official kernel checked separately).');
 					refreshUpdateControls();
 				}).catch(function () {
 					versionResult.textContent = tr('Could not check (network unreachable or blocked).');
@@ -1549,6 +1598,7 @@ return view.extend({
 						// 说明都是冗余的——内核卡片里没有升级入口,升级统一在
 						// 「J-Box 升级」卡片,这层关系不必再用文字重复一遍。
 						cardTitle(tr('sing-box core'), core, singboxVersion || tr('Not installed')),
+						E('div', { 'style': ROW }, [kernelResult, kernelCheckBtn]),
 						serviceButtons('jbox', core, [ 'stop', 'disable' ],
 							tr('Stopping also turns off autostart (so it stays stopped after a reboot) and restores plain internet access: the IPv6 leak block and the J-Box DNS upstream are removed. The panel stays reachable.'))
 					]),
