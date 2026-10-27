@@ -1,6 +1,6 @@
 name: Release
 
-# 推送标签后,先从该提交的内核补丁构建双架构 sing-box,再测试和封装面板。
+# 推送标签后,冻结官方最新稳定源码,应用本提交补丁并通过双架构构建与兼容测试才发布。
 
 on:
   push:
@@ -14,6 +14,30 @@ env:
   JBOX_REPO: aoxijy/J-box
 
 jobs:
+  resolve-kernel:
+    name: Freeze latest official stable kernel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test stable release selection and failure handling
+        run: python3 scripts/singbox-tcp-dns-hotfix/test_resolve_latest.py
+      - name: Resolve official stable release once for all architectures
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/singbox-tcp-dns-hotfix/resolve-latest.py kernel-input
+      - name: Check J-Box patches against resolved upstream source
+        run: |
+          set -eu
+          mkdir kernel-compat
+          tar -xzf kernel-input/source.tar.gz --strip-components=1 -C kernel-compat
+          patch --dry-run -p1 -d kernel-compat < scripts/singbox-tcp-dns-hotfix/tcp-dns-short-connections.patch
+          patch --dry-run -p1 -d kernel-compat < scripts/singbox-tcp-dns-hotfix/http-latency.patch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernel-input
+          path: kernel-input/
+          if-no-files-found: error
+
   geodata:
     name: Freeze complete Geo snapshot
     runs-on: ubuntu-latest
@@ -31,6 +55,7 @@ jobs:
 
   kernel:
     name: Build kernel (${{ matrix.arch }})
+    needs: resolve-kernel
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -38,6 +63,12 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: kernel-input
+          path: kernel-input
+      - name: Use frozen kernel version
+        run: cp kernel-input/versions.sh scripts/singbox-tcp-dns-hotfix/versions.sh
       - name: Read kernel tool versions
         id: versions
         run: |
@@ -47,7 +78,9 @@ jobs:
         with:
           go-version: ${{ steps.versions.outputs.go }}
           cache: false
-      - name: Build complete static kernel from repository inputs
+      - name: Build and test latest kernel with J-Box compatibility patches
+        env:
+          JBOX_SINGBOX_SOURCE_ARCHIVE: ${{ github.workspace }}/kernel-input/source.tar.gz
         run: sh scripts/singbox-tcp-dns-hotfix/build.sh ${{ matrix.arch }} kernel-build
       - uses: actions/upload-artifact@v4
         with:
@@ -70,7 +103,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.arch }})
-    needs: [kernel, geodata]
+    needs: [resolve-kernel, kernel, geodata]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -99,6 +132,12 @@ jobs:
         working-directory: panel
         run: corepack pnpm install --frozen-lockfile
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: kernel-input
+          path: kernel-input
+      - name: Use frozen kernel version
+        run: cp kernel-input/versions.sh scripts/singbox-tcp-dns-hotfix/versions.sh
       - name: Read kernel version
         id: kernel-version
         run: |
@@ -135,7 +174,7 @@ jobs:
         working-directory: panel
         run: corepack pnpm run test:server
 
-      - name: Verify generated config against pinned sing-box
+      - name: Verify generated config against this run's latest compatible sing-box
         working-directory: panel
         env:
           CI: 'true'
@@ -195,6 +234,15 @@ jobs:
           name: kernel-source
           path: dist-release
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: kernel-input
+          path: kernel-input
+      - name: Use frozen kernel version
+        run: cp kernel-input/versions.sh scripts/singbox-tcp-dns-hotfix/versions.sh
+      - name: Include upstream resolution record
+        run: cp kernel-input/resolution.json dist-release/kernel-resolution.json
+
       - name: List release assets
         run: ls -la dist-release
 
@@ -246,3 +294,4 @@ jobs:
             dist-release/*.tar.gz
             dist-release/*.sha256
             dist-release/*components.json
+            dist-release/kernel-resolution.json

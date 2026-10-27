@@ -57,3 +57,14 @@ TCP DNS 补丁最初版本为 `1.14.0-jbox-tcp1`。回归覆盖空闲连接无�
 - https://github.com/SagerNet/sing-box/blob/v1.13.14/dns/transport/tcp.go
 - https://github.com/SagerNet/sing-box/blob/v1.14.0/dns/transport/tcp.go
 - https://github.com/SagerNet/sing-box/blob/v1.14.0/dns/transport/multiplexer.go
+
+
+## Actions 自动跟随官方稳定内核
+
+发布工作流首先通过 SagerNet/sing-box 的 Releases API 获取最新正式版，拒绝 draft、预发布和低于仓库基线的版本。`resolve-latest.py` 一次下载源码并记录 SHA-256，生成本次构建专用 `versions.sh`。源码、版本和校验值通过同一个 `kernel-input` artifact 传给双架构内核、打包和发布说明步骤，避免执行期间官方更新导致不同架构版本不一致。
+
+Actions 不再直接用仓库固定的 1.14.0 发布：`versions.sh` 的固定值只作为本地构建基线和工具链配置。Actions 使用本次解析出的 `X.Y.Z-jbox-tcp2`，保留 TCP DNS 和 HTTP 测速补丁，以及完整协议、Naive 和静态 musl 构建要求。实际版本写入安装包 meta.json、组件清单、内核 BUILD-INFO 和 Release 说明；Release 附加 `kernel-resolution.json` 记录上游版本与源码校验值。
+
+兼容门禁：先检查两份补丁可应用；内核构建运行 TCP DNS 和 HTTP 回归；随后保留服务端完整测试（含真实内核测速集成测试）及生成配置检查。任何步骤失败，发布任务不执行。最新版本不兼容或联网失败时直接报告失败，不静默回退，不去掉补丁，不使用精简内核。此时需要维护者适配补丁或工具链；通过测试表示覆盖范围内兼容，不能保证所有实际线路都没有差异。
+
+这只影响下一次标签触发的发布构建，不会自动修改在线设备。按当前工作流，仅推送 main 不触发正式构建发布。
