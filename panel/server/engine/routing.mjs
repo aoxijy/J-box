@@ -6,14 +6,14 @@ import { customOutboundTag, customPolicyActive, customRuleTag, normalizeRouting,
 // 规则集例外:sing-box 1.14 起它和同一条里的域名 / IP 条件不再稳定地「或」,写进配置前要经
 // routing-model.mjs 的 splitRuleSetConditions 拆成两条(见那里的说明)
 // 规则集链接是域名 / IP 两份 .srs,路由规则两份都引用(见 routing-model.mjs 的 routeRulesetTags)
-const policyRule = (policy, ruleLists) => {
+const policyRule = (policy, ruleLists, omitInline = false) => {
   const rule = {}
   const rulesets = routeRulesetTags(policy, ruleLists)
   if (rulesets.length) rule.rule_set = rulesets
-  if (policy.domain.length) rule.domain = policy.domain
-  if (policy.domainSuffix.length) rule.domain_suffix = policy.domainSuffix
-  if (policy.domainKeyword.length) rule.domain_keyword = policy.domainKeyword
-  if (policy.ipCidr.length) rule.ip_cidr = policy.ipCidr
+  if (!omitInline && policy.domain.length) rule.domain = policy.domain
+  if (!omitInline && policy.domainSuffix.length) rule.domain_suffix = policy.domainSuffix
+  if (!omitInline && policy.domainKeyword.length) rule.domain_keyword = policy.domainKeyword
+  if (!omitInline && policy.ipCidr.length) rule.ip_cidr = policy.ipCidr
   rule.outbound = policy.name
   return rule
 }
@@ -178,6 +178,11 @@ export const buildRoute = (routing, rulesetDir, options = {}) => {
   // 访问对端局域网)永远写不出来,会被局域网直连那条先接走。
   // 一行一条规则、一行一个出口,按行的先后进配置(内核首条命中生效)。
   // 出口必须是配置里真有的 outbound,指向已删掉的节点的那一行跳过,其余行照常生效。
+  // 站点集内的优先手工规则仍指向该站点集,保持导入前的匹配顺序。
+  for (const policy of conf.activePolicies.filter((p) => p.inlinePriority)) {
+    const early = policyRule({ ...policy, rulesets: [] }, ruleLists)
+    if (Object.keys(early).length > 1) pushRule(early)
+  }
   const custom = conf.custom
   if (customPolicyActive(custom)) {
     const builtinTags = { direct: options.directTag || 'direct', block: options.blockTag || 'block' }
@@ -220,7 +225,8 @@ export const buildRoute = (routing, rulesetDir, options = {}) => {
   // 站点集按用户排的顺序逐条匹配,首条命中生效。规则集 + 域名 / IP 的站点集拆成紧邻的两条(1.14 的规则集语义)
   for (const policy of conf.activePolicies) {
     for (const tag of routeRulesetTags(policy, ruleLists)) addTag(tag)
-    for (const part of splitRuleSetConditions(policyRule(policy, ruleLists))) pushRule(part)
+    const row = policyRule(policy, ruleLists, policy.inlinePriority)
+    if (Object.keys(row).length > 1) for (const part of splitRuleSetConditions(row)) pushRule(part)
   }
   // 兜底此刻走代理:没命中的 v6 连接同样明确拒绝(final 写不了条件,单独一条)
   if (rejectV6For && rejectV6For(conf.fallback.name)) rules.push({ ip_version: 6, action: 'reject' })

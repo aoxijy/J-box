@@ -87,12 +87,12 @@ export const loadJBoxSiteSets = async () => {
     scales.set(fallbackName, Number(profile.routing.fallbackIconScale) || 0)
     siteSetIconScales.value = scales
     const custom = profile.routing.custom || {}
-    customPolicySummary.value = {
+    customPolicySummary.value = (custom.rules || []).length ? {
       name: custom.name?.trim() || CUSTOM_NAME,
       icon: custom.icon?.trim() || CUSTOM_ICON,
       iconScale: Number(custom.iconScale) || 0,
       active: custom.enabled !== false && (custom.rules || []).length > 0,
-    }
+    } : null
   } catch {
     // 拉不到就保持原样(空集 → 退回猜法),不让代理页因此打不开
   }

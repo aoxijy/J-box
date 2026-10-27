@@ -6,6 +6,7 @@ import { ensureRuleLists, loadRuleList, parseSrsSource } from './rule-lists.mjs'
 import { createMockContext } from './context.mjs'
 import { createPaths } from './paths.mjs'
 import { normalizeRouting, dnsRulesetTags, routeRulesetTags } from '../engine/routing-model.mjs'
+import { buildDns } from '../engine/dns.mjs'
 import { buildRoute } from '../engine/routing.mjs'
 import { createStore, KEYS } from '../store/jbox-store.mjs'
 
@@ -25,7 +26,15 @@ test('默认分流:首次离线装载 13 份二进制,路由顺序与 YAML 一�
   assert.equal(result.route.final, '🐟 漏网之鱼')
   assert.deepEqual(result.route.rules.filter((r) => r.rule_set).map((r) => r.outbound), conf.policies.map((p) => p.name))
   assert.ok(result.route.rule_set.every((r) => r.type === 'local' && r.format === 'binary'))
-  assert.equal(result.route.rules.filter((r) => r.outbound === 'block').length, 116)
+  const early = result.route.rules.findIndex((r) => r.outbound === '🛑 全球拦截' && r.domain)
+  const ai = result.route.rules.findIndex((r) => r.outbound === '🤖 AI平台')
+  assert.ok(early >= 0 && early < ai)
+  assert.equal(result.route.rules[early].domain.length + result.route.rules[early].domain_suffix.length, 116)
+  assert.equal(conf.custom.rules.length, 0)
+  const dns = buildDns({ dns: { split: true, direct: '223.5.5.5', proxy: '1.1.1.1' }, routing: defaults.routing }, { ruleLists: first.lists })
+  const dnsEarly = dns.rules.findIndex((r) => r.domain?.includes('crs.cr.adobe.com'))
+  const dnsAi = dns.rules.findIndex((r) => r.rule_set?.includes(conf.policies[0].rulesets[0]))
+  assert.ok(dnsEarly >= 0 && dnsEarly < dnsAi)
   for (const p of conf.policies) {
     assert.ok(dnsRulesetTags(p, first.lists).every((tag) => first.lists[tag].domain))
     const routed = routeRulesetTags(p, first.lists)

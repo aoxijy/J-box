@@ -176,6 +176,8 @@ export const buildDnsWithResolvers = (profile, options = {}) => {
       rules.push({ ...part, server: tag })
     }
   }
+  const priorityAt = rules.length
+  const priorityRules = []
   const custom = conf.custom
   if (customPolicyActive(custom)) {
     const serverByTarget = new Map()
@@ -245,17 +247,30 @@ export const buildDnsWithResolvers = (profile, options = {}) => {
   }
 
   conf.activePolicies.forEach((policy, index) => {
-    if (!hasDomainCondition(policy, ruleLists)) return
-    if (goesDirect(policy.name, policy.default)) {
-      rules.push(...splitRuleSetConditions(policyDnsRule(policy, 'dns-direct', ruleLists)))
-      resolvers.policies[policy.name] = 'dns-direct'
-      return
+    const start = rules.length
+    try {
+      if (!hasDomainCondition(policy, ruleLists)) return
+      if (goesDirect(policy.name, policy.default)) {
+        rules.push(...splitRuleSetConditions(policyDnsRule(policy, 'dns-direct', ruleLists)))
+        resolvers.policies[policy.name] = 'dns-direct'
+        return
+      }
+      const tag = `dns-policy-${index}`
+      servers.push(proxyServerFor(proxyHost, tag, policy.name))
+      pushProxyRule(policyDnsRule(policy, '', ruleLists), tag)
+      resolvers.policies[policy.name] = tag
+    } finally {
+      if (policy.inlinePriority) {
+        const emitted = rules.splice(start)
+        for (const rule of emitted) {
+          if (!rule.rule_set && (rule.domain || rule.domain_suffix || rule.domain_keyword)) priorityRules.push(rule)
+          else rules.push(rule)
+        }
+      }
     }
-    const tag = `dns-policy-${index}`
-    servers.push(proxyServerFor(proxyHost, tag, policy.name))
-    pushProxyRule(policyDnsRule(policy, '', ruleLists), tag)
-    resolvers.policies[policy.name] = tag
   })
+  rules.splice(priorityAt, 0, ...priorityRules)
+
 
   const fallbackDirect = goesDirect(conf.fallback.name, conf.fallback.default)
   resolvers.fallback = fallbackDirect ? 'dns-direct' : 'dns-proxy'

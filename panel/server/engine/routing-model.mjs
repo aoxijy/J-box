@@ -162,6 +162,7 @@ export const normalizePolicy = (raw, index = 0) => {
   const ruleUrls = strList(raw?.ruleUrls).filter((u) => /^https?:\/\//i.test(u))
   return {
     id: isNonEmptyString(raw?.id) ? raw.id.trim() : `policy-${index}`,
+    ...(raw?.inlinePriority === true ? { inlinePriority: true } : {}),
     name: isNonEmptyString(raw?.name) ? raw.name.trim() : `策略-${index + 1}`,
     // 图标是纯界面的东西(国家代码或 globe:xxx),不进内核配置
     icon: isNonEmptyString(raw?.icon) ? raw.icon.trim() : '',

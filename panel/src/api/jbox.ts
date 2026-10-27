@@ -15,6 +15,7 @@ export type JBoxRuleAction = 'direct' | 'proxy'
 // 一个站点集 = 一组匹配规则 + 内核里一个同名 selector。它不记具体节点:
 // selector 的成员由 outboundOptions 决定,用户在代理页点选。
 export interface JBoxRoutingPolicy {
+  inlinePriority?: boolean
   id: string
   name: string
   icon?: string

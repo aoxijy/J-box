@@ -13,6 +13,7 @@
          出口在这儿定死(而且能选到具体节点,站点集只能选到节点组),不在代理页点选。
          没选出口、或一条规则都没有时不进内核配置。 -->
     <div
+      v-if="customPolicy.rules?.length"
       class="card bg-base-100 border-base-content/10 flex flex-row items-center gap-2 border border-dashed p-3"
       :class="customPolicy.enabled === false && 'opacity-50'"
     >
@@ -164,6 +165,7 @@
     <!-- 兜底:上面都没命中的流量走它。系统生成、删不掉、拖不动——内核的 route.final
            必须指向某个出站,少了它整份配置就不成立。走哪条线路在「代理」页点选。 -->
     <div
+      v-if="customPolicy.rules?.length"
       class="card bg-base-100 border-base-content/10 flex flex-row items-center gap-2 border border-dashed p-3"
     >
       <Bars3Icon

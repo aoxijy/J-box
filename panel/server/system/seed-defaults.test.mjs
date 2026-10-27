@@ -49,7 +49,9 @@ test('全新安装同时写入默认档案(目标分流);已有 jbox/profile 或
   assert.deepEqual(names, ['🤖 AI平台', '🛑 全球拦截', '📲 社交聊天', '💻 开发平台', 'Ⓜ️ 微软苹果', '🎥 国外媒体', '🎯 全球直连'])
   assert.equal(defaults.routing.fallbackName, '🐟 漏网之鱼')
   assert.equal(defaults.routing.fallbackDefault, 'proxy')
-  assert.equal(defaults.routing.custom.rules.length, 116)
+  assert.equal(defaults.routing.custom.rules.length, 0)
+  const block = defaults.routing.policies.find((p) => p.id === 'aoxi-reject')
+  assert.equal(block.domain.length + block.domainSuffix.length, 116)
   assert.equal(defaults.routing.policies.flatMap((p) => p.ruleUrls).length, 13)
   assert.ok(defaults.routing.policies.every((p) => p.ruleUrls.every((u) => u.endsWith('.srs'))))
   // 不带任何个人域名
