@@ -134,7 +134,6 @@ export const defaultGroups = () => {
   return [
     builtinDefaults()[0],
     auto('aoxi-chatgpt-auto', '🕸️ CHATGPT自动', ['美国', '其他', 'US', 'United States'], { interval: '300s', tolerance: 200, testUrl: 'http://chatgpt.com/cdn-cgi/trace' }),
-    { id: 'aoxi-node-select', name: '🚀 节点选择', icon: 'globe:earth-asia', type: 'selector', mode: 'static', keywords: [], members: ['♻️ 自动选择', '💁 所有手动', '直连'], enabled: true },
     { id: 'all-manual', name: '💁 所有手动', type: 'selector', mode: 'dynamic', icon: 'globe:earth-meridians', keywords: [], members: [], enabled: true },
     auto('all-auto', '♻️ 自动选择'),
     auto('aoxi-hk-auto', '♻️ 香港自动', ['香港', 'HK', 'Hong Kong'], { icon: 'HK' }),
@@ -146,8 +145,11 @@ export const defaultGroups = () => {
 }
 
 // 仅迁移完全未修改的旧默认节点组;自建组保留。
-export const migrateDefaultGroups = (list) =>
-  JSON.stringify(normalizeGroups(list)) === JSON.stringify(normalizeGroups(legacyDefaultGroups())) ? defaultGroups() : list
+export const migrateDefaultGroups = (list) => {
+  if (JSON.stringify(normalizeGroups(list)) === JSON.stringify(normalizeGroups(legacyDefaultGroups()))) return defaultGroups()
+  const kept = list.filter((g) => !(g.id === 'aoxi-node-select' && g.name === '🚀 节点选择'))
+  return kept.length === list.length ? list : kept
+}
 
 const isNonEmptyString = (v) => typeof v === 'string' && v.trim().length > 0
 
