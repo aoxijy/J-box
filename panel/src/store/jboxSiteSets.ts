@@ -76,7 +76,11 @@ export const loadJBoxSiteSets = async () => {
     const names = policies.map((p) => p.name)
     const fallbackName = profile.routing.fallbackName?.trim() || FALLBACK_NAME
     siteSetNames.value = new Set([...names, fallbackName])
-    siteSetOrder.value = [...names, fallbackName]
+    // 仅调整策略卡片的默认显示顺序,分流命中顺序与 route.final 保持不变。
+    const displayNames = [...names]
+    const directIndex = policies.findIndex((p) => p.id === 'aoxi-direct')
+    displayNames.splice(directIndex < 0 ? displayNames.length : directIndex, 0, fallbackName)
+    siteSetOrder.value = displayNames
     siteSetDisplayOrder.value = Array.isArray(profile.routing.displayOrder)
       ? profile.routing.displayOrder.filter((name) => typeof name === 'string')
       : []

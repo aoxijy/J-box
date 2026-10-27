@@ -231,6 +231,16 @@
     "adBlock": false,
     "fallbackDefault": "♻️ 香港自动",
     "fallbackName": "🐟 漏网之鱼",
-    "fallbackIcon": "globe:generic"
+    "fallbackIcon": "globe:generic",
+    "displayOrder": [
+      "🤖 AI平台",
+      "🛑 全球拦截",
+      "📲 社交聊天",
+      "💻 开发平台",
+      "Ⓜ️ 微软苹果",
+      "🎥 国外媒体",
+      "🐟 漏网之鱼",
+      "🎯 全球直连"
+    ]
   }
 }
