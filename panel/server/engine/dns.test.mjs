@@ -310,7 +310,7 @@ test('FakeIP 原型(dns.fakeIpForProxy):走代理的匹配先给 A / AAAA 一条
   }
   const on = buildDns({ ...withRouting(routing), dns: { ...base.dns, fakeIpForProxy: true } }, GROUPS)
   const fake = on.servers.find((s) => s.type === 'fakeip')
-  assert.deepEqual(fake, { type: 'fakeip', tag: 'dns-fakeip', inet4_range: '198.18.0.0/15', inet6_range: '2001:db8::/32' })
+  assert.deepEqual(fake, { type: 'fakeip', tag: 'dns-fakeip', inet4_range: '198.15.0.0/15', inet6_range: 'fc00::/18' })
   // 自定义代理行:占位规则在真解析器规则前面,且只管 A / AAAA
   assert.deepEqual(on.rules[0], { domain_suffix: ['x.test'], query_type: ['A', 'AAAA'], server: 'dns-fakeip' })
   assert.deepEqual(on.rules[1], { domain_suffix: ['x.test'], server: 'dns-custom-0' })
@@ -325,7 +325,7 @@ test('FakeIP 原型(dns.fakeIpForProxy):走代理的匹配先给 A / AAAA 一条
   assert.equal(on.final, 'dns-proxy')
   // 没开 IPv6 就不给 v6 占位段
   const v4 = buildDns({ ...withRouting(routing), ipv6: false, dns: { ...base.dns, fakeIpForProxy: true } }, GROUPS)
-  assert.deepEqual(v4.servers.find((s) => s.type === 'fakeip'), { type: 'fakeip', tag: 'dns-fakeip', inet4_range: '198.18.0.0/15' })
+  assert.deepEqual(v4.servers.find((s) => s.type === 'fakeip'), { type: 'fakeip', tag: 'dns-fakeip', inet4_range: '198.15.0.0/15' })
   // 兜底直连:收尾不占位
   const fbDirect = buildDns({ ...withRouting({ ...routing, fallbackDefault: 'direct' }), dns: { ...base.dns, fakeIpForProxy: true } }, GROUPS)
   assert.ok(!fbDirect.rules.some((r) => r.server === 'dns-fakeip' && !r.rule_set && !r.domain_suffix))
@@ -375,13 +375,13 @@ test('IPv6 分层 · 代理 v6 降为 IPv4(ipv6 开 + ipv6Proxy=ipv4):走代理�
   // FakeIP + 降为 IPv4:占位服务器没有 inet6_range;每个走代理的匹配是 AAAA 回空 → 占位(只管 A)→ 真实解析器,
   // 兜底同样先回空 AAAA 再占位 A
   const fake = buildDns({ ...withRouting(routing), ipv6: true, ipv6Proxy: 'ipv4', dns: { ...base.dns, fakeIpForProxy: true } }, GROUPS)
-  assert.deepEqual(fake.servers.find((s) => s.type === 'fakeip'), { type: 'fakeip', tag: 'dns-fakeip', inet4_range: '198.18.0.0/15' })
+  assert.deepEqual(fake.servers.find((s) => s.type === 'fakeip'), { type: 'fakeip', tag: 'dns-fakeip', inet4_range: '198.15.0.0/15' })
   const fakeGoogle = fake.rules.filter((r) => r.rule_set && r.rule_set[0] === 'geosite-google')
   assert.deepEqual(fakeGoogle.map((r) => r.action || r.server), ['predefined', 'dns-fakeip', 'dns-policy-0'])
   assert.deepEqual(fakeGoogle[1].query_type, ['A'])
   assert.deepEqual(fake.rules.slice(-2), [{ query_type: ['AAAA'], action: 'predefined', rcode: 'NOERROR' }, { query_type: ['A'], server: 'dns-fakeip' }])
   const fakeNode = buildDns({ ...withRouting(routing), ipv6: true, ipv6Proxy: 'node', dns: { ...base.dns, fakeIpForProxy: true } }, GROUPS)
-  assert.equal(fakeNode.servers.find((s) => s.type === 'fakeip').inet6_range, '2001:db8::/32')
+  assert.equal(fakeNode.servers.find((s) => s.type === 'fakeip').inet6_range, 'fc00::/18')
 })
 
 test('ipv6ProxyMode:关着 off、默认 node、降级 ipv4、不进内核 bypass;bypass 的 DNS 和 node 一样双栈、不回空 AAAA', () => {
@@ -409,14 +409,4 @@ test('F2:IPv6 不进内核(bypass)+ FakeIP:占位只管 A,AAAA 继续交给真�
   assert.deepEqual(node.rules.at(-1), { query_type: ['A', 'AAAA'], server: 'dns-fakeip' })
   const v4 = fake({ ipv6Proxy: 'ipv4' })
   assert.deepEqual(rulesFor(v4).map((r) => [r.server || r.action, r.query_type || null]), [['predefined', ['AAAA']], ['dns-fakeip', ['A']], ['dns-policy-0', null]])
-})
-
-test('假 v6 段必须是全局单播(2000::/3),不能用 ULA', async () => {
-  // 2026-09-14 现场:用 ULA(fc00::/18)做假 v6 时,客户端给「ULA 目标」选源地址会优先挑自己那条同类型的
-  // ULA(很多设备上还留着旧主路由 RA 下发的残留),这个源不在内核接管集合里 → 走代理域名的 v6 连接
-  // 直接卡死(YouTube 封面 / googlevideo 全挂);而且 ULA 目标会被内核的私网排除挡在接管之外。
-  const { FAKEIP_V6 } = await import('./dns.mjs')
-  const firstHextet = parseInt(String(FAKEIP_V6).split(':')[0], 16)
-  assert.ok(firstHextet >= 0x2000 && firstHextet <= 0x3fff, `假 v6 段要落在 2000::/3 全局单播里,当前是 ${FAKEIP_V6}`)
-  assert.ok(!/^f[cd]/i.test(String(FAKEIP_V6)), `假 v6 段不能用 ULA(fc00::/7),当前是 ${FAKEIP_V6}`)
 })

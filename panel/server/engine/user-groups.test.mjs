@@ -6,8 +6,8 @@ const nodes = ['香港-01', '香港-02', '美国-01'].map((tag) => ({ tag }))
 
 // emitUserGroups 的输出永远以两个内置出站(直连/拒绝)开头;大多数用例只关心用户的组
 const userOnly = (outbounds) => outbounds.filter((o) => o.type !== 'direct' && o.type !== 'block')
-const emitUser = (groups, ns, options) => {
-  const r = emitUserGroups(groups, ns, options)
+const emitUser = (groups, ns) => {
+  const r = emitUserGroups(groups, ns)
   return { ...r, outbounds: userOnly(r.outbounds) }
 }
 
@@ -44,7 +44,7 @@ test('故障转移:归一化后固定静态、members/keywords 清空、lanes �
     { id: 'A~', name: '备', icon: '', members: [] },
   ])
   assert.equal(g.interval, '300s')
-  assert.equal(g.tolerance, 200)
+  assert.equal(g.tolerance, 100)
   assert.deepEqual(g.failover, { timeoutMs: 5000, failureThreshold: 2, restorePrimary: false, recoveryHoldMs: 60000 })
   // 页签最多 3 个,多出来的读取时丢掉(写入时 API 直接拒)
   const many = normalizeGroup(failoverGroup({ lanes: [1, 2, 3, 4, 5].map((i) => ({ id: `L${i}`, members: ['香港-01'] })) }))
@@ -59,7 +59,7 @@ test('故障转移:单节点页签直接引用节点,多节点页签生成内部
   assert.equal(sub.tag, '__fo:fo1:B')
   assert.deepEqual(sub.outbounds, ['香港-02', '美国-01'])
   assert.equal(sub.interval, '300s')
-  assert.equal(sub.tolerance, 200)
+  assert.equal(sub.tolerance, 100)
   assert.equal(sub.idle_timeout, '12h')
   assert.deepEqual(parent, {
     type: 'selector', tag: '主备', outbounds: ['香港-01', '__fo:fo1:B', '拒绝'], default: '香港-01', interrupt_exist_connections: true,
@@ -118,81 +118,26 @@ test('故障转移:别的组可以把故障转移父组当成员,但拿不到内
   assert.deepEqual(outbounds.find((o) => o.tag === '手动').outbounds, ['主备'])
 })
 
-test('随包的默认组:按快照落地分组结构,但不带节点——空的静态组挂直连占位,动态组吃全部节点', () => {
-  const customTestUrl = 'https://api.openai.com/v1/models'
-  const { outbounds, dropped } = emitUser(defaultGroups(), nodes, { customTestUrl })
+test('默认两个组:所有-自动(urltest) 与 所有-手动(selector),成员都是全部节点', () => {
+  const { outbounds, dropped } = emitUser(defaultGroups(), nodes)
   assert.equal(dropped.length, 0)
   assert.deepEqual(outbounds.map((o) => [o.tag, o.type]), [
-    ['CHATGPT自动', 'urltest'],
-    ['香港-自动', 'urltest'],
-    ['亚洲-自动', 'urltest'],
-    ['美国-自动', 'urltest'],
-    ['其他-自动', 'urltest'],
     ['所有-自动', 'urltest'],
     ['所有-手动', 'selector'],
   ])
-  // 地区组现在按关键词动态收编;未命中节点的组挂直连占位
-  assert.deepEqual(outbounds.find((o) => o.tag === 'CHATGPT自动').outbounds, ['美国-01'])
-  assert.deepEqual(outbounds.find((o) => o.tag === '香港-自动').outbounds, ['香港-01', '香港-02'])
-  assert.deepEqual(outbounds.find((o) => o.tag === '亚洲-自动').outbounds, ['直连'])
-  assert.deepEqual(outbounds.find((o) => o.tag === '美国-自动').outbounds, ['美国-01'])
-  assert.deepEqual(outbounds.find((o) => o.tag === '其他-自动').outbounds, ['直连'])
-  // 两个动态组是"当前所有有效节点"
-  assert.deepEqual(outbounds.find((o) => o.tag === '所有-自动').outbounds, ['香港-01', '香港-02', '美国-01'])
-  assert.deepEqual(outbounds.find((o) => o.tag === '所有-手动').outbounds, ['香港-01', '香港-02', '美国-01'])
-  const chatgpt = outbounds.find((o) => o.tag === 'CHATGPT自动')
-  assert.equal(chatgpt.interval, '300s')
-  assert.equal(chatgpt.tolerance, 200)
-  assert.equal(chatgpt.idle_timeout, '12h')
-  assert.equal(chatgpt.url, 'https://api.openai.com/v1/models')
+  assert.deepEqual(outbounds[0].outbounds, ['香港-01', '香港-02', '美国-01'])
+  assert.equal(outbounds[0].interval, '300s')
+  assert.equal(outbounds[0].tolerance, 100)
   // selector 不该带 urltest 才有的字段
-  assert.equal(outbounds.find((o) => o.tag === '所有-手动').interval, undefined)
-  assert.equal(outbounds.find((o) => o.tag === '所有-手动').tolerance, undefined)
-})
-
-test('随包的分组快照里没有任何节点成员(不把作者的节点名发出去)', async () => {
-  const fs = await import('node:fs')
-  const snapshot = JSON.parse(fs.readFileSync(new URL('../defaults/groups-defaults.json', import.meta.url), 'utf8'))
-  assert.ok(snapshot.length >= 5)
-  for (const g of snapshot) {
-    assert.deepEqual(g.members, [], `${g.name} 的成员表应为空`)
-  }
+  assert.equal(outbounds[1].interval, undefined)
+  assert.equal(outbounds[1].tolerance, undefined)
 })
 
 test('allNodes 是动态的:节点变了,组的成员跟着变', () => {
-  const pick = (ns) => emitUser(defaultGroups(), ns).outbounds.find((o) => o.tag === '所有-自动').outbounds
-  const before = pick(nodes)
-  const after = pick([{ tag: '新节点' }])
+  const before = emitUser(defaultGroups(), nodes).outbounds[0].outbounds
+  const after = emitUser(defaultGroups(), [{ tag: '新节点' }]).outbounds[0].outbounds
   assert.equal(before.length, 3)
   assert.deepEqual(after, ['新节点'])
-})
-
-test('地区策略组按关键词动态收编订阅节点:CHATGPT自动覆盖美国/亚洲/其它,专属组按地区匹配', () => {
-  const groups = defaultGroups()
-  const byName = Object.fromEntries(groups.map((g) => [g.name, g]))
-  for (const name of ['CHATGPT自动', '香港-自动', '亚洲-自动', '美国-自动', '其他-自动']) {
-    assert.equal(byName[name].mode, 'dynamic', `${name} 应为动态组`)
-  }
-  assert.deepEqual(byName['CHATGPT自动'].keywords, ['美国', '亚洲', '其他'])
-  assert.deepEqual(byName['香港-自动'].keywords, ['香港'])
-  assert.deepEqual(byName['亚洲-自动'].keywords, ['亚洲'])
-  assert.deepEqual(byName['美国-自动'].keywords, ['美国'])
-  assert.deepEqual(byName['其他-自动'].keywords, ['其他'])
-
-  const subscribed = [
-    { tag: '机场 | 美国-01' },
-    { tag: '机场 | 香港-01' },
-    { tag: '机场 | 新加坡-01', regionName: '亚洲' },
-    { tag: '机场 | 其他-01', regionName: '其他' },
-    { tag: '机场 | 日本-01', regionName: '亚洲' },
-  ]
-  const outbounds = emitUser(groups, subscribed).outbounds
-  const members = Object.fromEntries(outbounds.map((o) => [o.tag, o.outbounds]))
-  assert.deepEqual(members['CHATGPT自动'], ['机场 | 美国-01', '机场 | 新加坡-01', '机场 | 其他-01', '机场 | 日本-01'])
-  assert.deepEqual(members['香港-自动'], ['机场 | 香港-01'])
-  assert.deepEqual(members['亚洲-自动'], ['机场 | 新加坡-01', '机场 | 日本-01'])
-  assert.deepEqual(members['美国-自动'], ['机场 | 美国-01'])
-  assert.deepEqual(members['其他-自动'], ['机场 | 其他-01'])
 })
 
 // 以下三条是 sing-box check 挡不住、必须由生成器自己保证的(见模块头注释)
@@ -249,7 +194,7 @@ test('normalizeGroup:非法类型回落 selector,非法容差回落默认值', (
   assert.equal(g.type, 'selector')
   assert.equal(g.tolerance, undefined) // selector 不带这个字段
   const u = normalizeGroup({ name: 'Y', type: 'urltest', tolerance: 'abc' })
-  assert.equal(u.tolerance, 200)
+  assert.equal(u.tolerance, 100)
   assert.equal(u.interval, '300s')
 })
 
@@ -341,20 +286,10 @@ test('图标不进 sing-box 出站:那边没有这个字段', () => {
   assert.ok(!('icon' in outbounds[0]), '出站里不该出现 icon')
 })
 
-test('默认列表:内置出站与随包分组都在,各自带自己的图标', () => {
+test('默认列表:直连、拒绝两个内置出站在前,两个默认组自带地球图标', () => {
   assert.deepEqual(
     defaultGroups().map((g) => [g.name, g.icon]),
-    [
-      ['CHATGPT自动', 'brand:githubcopilot'],
-      ['香港-自动', 'HK'],
-      ['亚洲-自动', 'globe:earth-asia'],
-      ['美国-自动', 'US'],
-      ['其他-自动', 'globe:earth-meridians'],
-      ['所有-自动', 'globe:earth-asia'],
-      ['所有-手动', 'globe:earth-meridians'],
-      ['直连', 'misc:dart'],
-      ['拒绝', 'misc:cross'],
-    ],
+    [['直连', 'misc:dart'], ['所有-自动', 'globe:earth-asia'], ['所有-手动', 'globe:earth-meridians'], ['拒绝', 'misc:cross']],
   )
 })
 
@@ -423,20 +358,6 @@ test('url-test 组的测速地址:组里填了用组的,没填用档案里的全
   assert.equal(noGlobal[1].url, 'http://www.gstatic.com/generate_204')
 })
 
-test('分组测速地址选「自定义地址」时引用档案里的 customTestUrl(AI 分组测 OpenAI 走这条)', () => {
-  const groups = [
-    { id: 'ai', name: 'AI', type: 'urltest', mode: 'dynamic', keywords: [], testUrl: 'custom' },
-    { id: 'b', name: 'B', type: 'urltest', mode: 'dynamic', keywords: [] },
-  ]
-  const out = userOnly(
-    emitUserGroups(groups, nodes, { testUrl: 'http://global.test/204', customTestUrl: 'https://api.openai.com/v1/models' }).outbounds,
-  )
-  assert.deepEqual(out.map((o) => o.url), ['https://api.openai.com/v1/models', 'http://global.test/204'])
-  // 后端设置里没填自定义地址 → 引用它的分组回落全局,不会产生空 url
-  const fallback = userOnly(emitUserGroups(groups, nodes, { testUrl: 'http://global.test/204' }).outbounds)
-  assert.deepEqual(fallback.map((o) => o.url), ['http://global.test/204', 'http://global.test/204'])
-})
-
 test('自动择优组带 idle_timeout:内核默认 30 分钟不用就停止健康检查,停了就一直挂在失效的线路上', () => {
   const { outbounds } = emitUserGroups(
     [{ id: 'g', name: '自动', type: 'urltest', mode: 'static', members: ['A', 'B'] }],
@@ -445,7 +366,7 @@ test('自动择优组带 idle_timeout:内核默认 30 分钟不用就停止健�
   const group = outbounds.find((o) => o.tag === '自动')
   assert.equal(group.type, 'urltest')
   assert.equal(group.interval, '300s')
-  assert.equal(group.tolerance, 200)
+  assert.equal(group.tolerance, 100)
   assert.equal(group.idle_timeout, '12h')
   // 组自己填了就用组的
   const custom = emitUserGroups(
@@ -466,24 +387,6 @@ test('图标缩放:整数、限在 ±20,缺省 0', async () => {
   assert.equal(normalizeGroup({ name: 'x', iconScale: -3 }).iconScale, -3)
   assert.equal(normalizeGroup({ name: 'x' }).iconScale, 0)
 })
-
-test('AI takeover converts every URLTest group to its own selector and preserves each group URL/member scope', () => {
-  const groups = [
-    { id: 'chatgpt', name: 'CHATGPT 自动', type: 'urltest', mode: 'static', members: ['美国-01'], testUrl: 'https://chatgpt.example/generate' },
-    { id: 'asia', name: '亚洲-自动', type: 'urltest', mode: 'static', members: ['香港-01'], testUrl: 'https://probe.example/ping' },
-  ]
-  const generated = emitUserGroups(groups, nodes, { aiOptimizer: { enabled: true } })
-  for (const name of ['CHATGPT 自动', '亚洲-自动']) {
-    assert.equal(generated.outbounds.find((o) => o.tag === name).type, 'selector')
-  }
-  assert.deepEqual(generated.aiGroups.map((g) => [g.tag, g.members, g.url]), [
-    ['CHATGPT 自动', ['美国-01'], 'https://chatgpt.example/generate'],
-    ['亚洲-自动', ['香港-01'], 'https://probe.example/ping'],
-  ])
-  const native = emitUserGroups(groups, nodes).outbounds
-  assert.equal(native.find((o) => o.tag === 'CHATGPT 自动').type, 'urltest')
-})
-
 
 test('interval 比 idle_timeout 长时 idle_timeout 抬到和 interval 一样(sing-box 要求 interval ≤ idle_timeout,check 查不出、启动才炸)', async () => {
   const { emitUserGroups, idleTimeoutFor } = await import('./user-groups.mjs')

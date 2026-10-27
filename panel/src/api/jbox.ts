@@ -205,24 +205,8 @@ export interface JBoxProfile {
   // 测速地址:testUrl 给自动择优组和面板延迟测试用;directTestUrl 只给内置直连用
   testUrl?: string
   directTestUrl?: string
-  // 分组可选的「自定义测速地址」(分组测速地址 = custom 时引用它;留空回落 testUrl)
-  customTestUrl?: string
   // 每日流量这些分析数据留多久(月,1~36)
   traffic?: { keepMonths?: number }
-  aiOptimizer?: {
-    enabled?: boolean
-    policyPriority?: number
-    asnPriority?: boolean
-    sensitivityMs?: number
-    collectTrainingData?: boolean
-    minSamples?: number
-    maxSampleAgeHours?: number
-    latencyWeight?: number
-    reliabilityWeight?: number
-    jitterWeight?: number
-    probeConcurrency?: number
-    intervalSeconds?: number
-  }
   rulesetDir?: string
 }
 
@@ -238,7 +222,6 @@ export interface JBoxProfileDefaults {
 export interface JBoxRenameRegionEntry {
   code: string
   name: string
-  icon?: string
   keywords: string[]
 }
 
@@ -1032,7 +1015,7 @@ export interface JBoxRouteTest {
     // runtimeChain:代理侧解析时查询实际经过的线路,detour 的站点集 → 节点组 → 节点(按内核此刻的选择);runtimeLeaf 是它的末尾
     // fakeIpRule:内核自己的 fakeip 规则(FakeIP 原型)先命中,A / AAAA 拿占位地址;server 是其它查询类型走的真解析器
     | { ruleIndex: number | null; rejected?: boolean; server?: { tag: string; type?: string; server?: string; detour?: string }; viaProxy?: boolean; stale?: 'direct' | 'proxy'; runtimeLeaf?: string; runtimeChain?: string[]; fakeIpRule?: number; assumed?: JBoxDnsAssumption[]; rewrite?: JBoxDnsRewriteHit }
-  // fakeIp:答案落在 fake-ip 段(198.18.0.0/15),不是配置里那台 DNS 答的;fakeIpFrom 是代理侧解析时
+  // fakeIp:答案落在 fake-ip 段(198.15.0.0/15),不是配置里那台 DNS 答的;fakeIpFrom 是代理侧解析时
   // 截下查询并应答的那个节点(detour 此刻落到的节点),直连解析回 fake-ip 时没有这个字段;
   // fakeIpLocal:占位地址是内核自己发的(FakeIP 原型),连接时按它找回域名交给选中的节点解析
   // ttl:答案的剩余 TTL(秒);cached:代理侧解析几毫秒就回来了,是内核缓存里的答案,这次没有经线路去问
@@ -1165,12 +1148,6 @@ export interface JBoxTerminalTest {
 export const fetchTerminalCapability = () => requestJson<JBoxTerminalCapability>('/api/jbox/terminal-test/capability')
 export const testTerminal = (target: string, port?: number) =>
   requestJson<JBoxTerminalTest>('/api/jbox/terminal-test', { method: 'POST', body: JSON.stringify({ target, port }) })
-
-export type JBoxAiOptimizerStatus = { enabled: boolean; groups: { tag: string; url: string; members: number; selected: string; sampled?: number; ready?: number }[]; lastRunAt: number; lastError: string; tested: number; switched: number; shared: number; training?: boolean; model?: { available: boolean; version: string; trainedAt: string; samples: number; error: string } }
-export const fetchAiOptimizerStatus = () => requestJson<JBoxAiOptimizerStatus>('/api/jbox/ai-optimizer/status')
-export const runAiOptimizerNow = () => requestJson<{ enabled: boolean; groups?: number; tested?: number; switched?: number; shared?: number; error?: string }>('/api/jbox/ai-optimizer/run', { method: 'POST' })
-export const updateAiOptimizerModel = () => requestJson<{ ok: boolean; reason?: string; error?: string; version?: string; samples?: number; required?: number; trainedAt?: string; models?: number }>('/api/jbox/ai-optimizer/model/update', { method: 'POST' })
-export const clearAiHistory = () => requestJson<{ ok: boolean; removedSamples: number; removedModels: number }>('/api/jbox/ai-optimizer/training/reset', { method: 'POST', body: '{}' })
 
 // ---- 延迟历史(server/api/latency-history.mjs):每个节点最近 10 次测速结果,服务端记、所有浏览器共享
 // node:组的样本带当时选中的节点;节点自己的样本没有

@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 // 延迟历史:每个节点最近 10 次测速结果,面板服务端记、所有浏览器共享。
 //
 // sing-box 的 clash API 每个节点只留最新一次结果,超时还会把这条记录直接删掉。所以这里按
@@ -11,10 +9,7 @@ import { createHash } from 'node:crypto'
 export const MAX_SAMPLES = 10
 export const TIMED_OUT = 0
 export const LATENCY_HISTORY_KEY = 'jbox/latency-history'
-export const AI_LATENCY_HISTORY_KEY = 'jbox/ai-latency-history'
-const urlKey = (url) => createHash('sha256').update(String(url)).digest('hex')
-// 同一节点两笔超时靠得太近(不同来源在同一事件上各记了一笔)就当一笔。
-// 组配置了检测间隔时,窗口用组自己的 interval(见 record 的 dedupeMs),这里只是兜底。
+// 同一节点两笔超时靠得太近(不同来源在同一事件上各记了一笔)就当一笔
 const TIMEOUT_DEDUPE_MS = 60_000
 
 // 这个组(含嵌套的组)下面有没有任何一个节点有结果——有就说明组还有地方可切
@@ -45,64 +40,34 @@ const leafOf = (proxies, name) => {
 }
 
 export const createLatencyHistory = ({ store, now = () => Date.now() }) => {
-    const readKey = (key) => {
-      try {
-        const parsed = JSON.parse(store.getRaw(key) || '{}')
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
-      } catch { return {} }
+  const read = () => {
+    try {
+      const parsed = JSON.parse(store.getRaw(LATENCY_HISTORY_KEY) || '{}')
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+    } catch {
+      return {}
     }
-    const read = () => readKey(LATENCY_HISTORY_KEY)
-    let cache = read()
-    let aiCache = readKey(AI_LATENCY_HISTORY_KEY)
-    let dirty = false
-    let aiDirty = false
-    // 最近一次真正写入的时刻:前端轮询它,变了才拉整份
-    let updatedAt = 0
-    const flush = () => {
-      if (dirty) {
-        store.setRaw(LATENCY_HISTORY_KEY, JSON.stringify(cache))
-        dirty = false
-      }
-      if (aiDirty) {
-        store.setRaw(AI_LATENCY_HISTORY_KEY, JSON.stringify(aiCache))
-        aiDirty = false
-      }
-      updatedAt = now()
-    }
-
-    // 仅供 AI 训练的历史:节点 + 探测 URL 哈希分桶,最多保留各 10 条。
-    // 与旧的共享历史隔离,不能把不同服务的延迟当成同一个预测目标;原始 URL 不落盘。
-    const recordAiProbe = (name, url, sample) => {
-      if (!name || typeof name !== 'string' || !url || typeof url !== 'string' || !isSample(sample)) return false
-      const key = urlKey(url)
-      const bucket = aiCache[key] || {}
-      const list = bucket[name] || []
-      if (list.some((item) => item.time === sample.time)) return false
-      const next = [...list, { time: sample.time, delay: Math.round(sample.delay) }].sort((a, b) => Date.parse(a.time) - Date.parse(b.time)).slice(-MAX_SAMPLES)
-      aiCache = { ...aiCache, [key]: { ...bucket, [name]: next } }
-      aiDirty = true
-      return true
-    }
-    const getAiForUrl = (url) => (url ? aiCache[urlKey(url)] || {} : {})
+  }
+  let cache = read()
+  let dirty = false
+  // 最近一次真正写入的时刻:前端轮询它,变了才拉整份
+  let updatedAt = 0
+  const flush = () => {
+    if (!dirty) return
+    store.setRaw(LATENCY_HISTORY_KEY, JSON.stringify(cache))
+    dirty = false
+    updatedAt = now()
+  }
 
   // 记一笔。和已存的最后一条时间相同就是同一次结果,不重复;乱序到达的按时间插入。
   // 组的样本多一个 node:那一笔是组当时选中的哪个节点测出来的
-  // dedupeMs:同一节点的组记录在这个窗口内只留一笔。窗口 = 组配置的检测间隔
-  // (system/latency-scheduler.mjs 的 dedupeWindows 算好传进来)——共享节点被别的组
-  // 测速时会连着冒出同一节点的结果,窗口把它们合成一笔,时间线上不再出现几十秒内的
-  // 连续重复;没有间隔信息时退回 60 秒。
-  const record = (name, sample, dedupeMs = 0) => {
+  const record = (name, sample) => {
     if (!name || typeof name !== 'string' || !isSample(sample)) return false
     const list = cache[name] || []
     const last = list[list.length - 1]
     const node = typeof sample.node === 'string' && sample.node ? sample.node : undefined
     if (last && last.time === sample.time && (last.node || undefined) === node) return false
-    const window = dedupeMs > 0 ? dedupeMs : TIMEOUT_DEDUPE_MS
-    // 同一节点在窗口内的连续成功记录合成一笔(窗口 = 组配置的检测间隔,间隔内的重复记录
-    // 属于同一次检测)。「成功 → 超时」是真实的状态变化,不能被窗口吃掉。
-    if (node && sample.delay > 0 && last && last.node === node && last.delay > 0 && Math.abs(Date.parse(sample.time) - Date.parse(last.time)) < window) return false
-    // 连续超时同样按窗口合并
-    if (sample.delay === TIMED_OUT && last && last.delay === TIMED_OUT && (last.node || undefined) === node && Math.abs(Date.parse(sample.time) - Date.parse(last.time)) < window) return false
+    if (sample.delay === TIMED_OUT && last && last.delay === TIMED_OUT && (last.node || undefined) === node && Math.abs(Date.parse(sample.time) - Date.parse(last.time)) < TIMEOUT_DEDUPE_MS) return false
     const next = [...list, { time: sample.time, delay: Math.round(sample.delay), ...(node ? { node } : {}) }].sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
     while (next.length > MAX_SAMPLES) next.shift()
     cache = { ...cache, [name]: next }
@@ -121,7 +86,7 @@ export const createLatencyHistory = ({ store, now = () => Date.now() }) => {
   // 变化——以前组的时间线直接取当前所选节点的,切换之后整条线都变成新节点的历史。
   // 时间用节点那次测试的时间;切到一个早就测过的节点(它的结果比组上一笔还旧)就用观察时刻,
   // 时间线才是按发生顺序排的。选中的节点没结果 = 超时(上一笔已经是同一节点的超时就不重复)。
-  const recordGroup = (proxies, name, proxy, { kernelStartedAt, at, dedupeMs = 0 }) => {
+  const recordGroup = (proxies, name, proxy, { kernelStartedAt, at }) => {
     const leaf = leafOf(proxies, name)
     if (!leaf) return false
     const list = cache[name]
@@ -133,7 +98,7 @@ export const createLatencyHistory = ({ store, now = () => Date.now() }) => {
       const prevT = prev ? Date.parse(prev.time) : 0
       if (prev && prev.node === leaf && (prev.time === last.time || t <= prevT)) return false
       const time = !prev || t > prevT ? last.time : new Date(at).toISOString()
-      return record(name, { time, delay: last.delay, node: leaf }, dedupeMs)
+      return record(name, { time, delay: last.delay, node: leaf })
     }
     if (!prev) return false
     if (prev.node === leaf && prev.delay === TIMED_OUT) return false
@@ -141,26 +106,23 @@ export const createLatencyHistory = ({ store, now = () => Date.now() }) => {
     // 组的时间线不记超时:选中节点超时会导致组切走,切走时记新节点那笔就够了。只有组里所有成员
     // 都没结果、无处可切,才记一笔超时(sing-box 这时会一直挂在这个没结果的节点上)。
     if (anyResultUnder(proxies, name)) return false
-    return record(name, { time: new Date(at).toISOString(), delay: TIMED_OUT, node: leaf }, dedupeMs)
+    return record(name, { time: new Date(at).toISOString(), delay: TIMED_OUT, node: leaf })
   }
 
   // 从整份 /proxies 记(见文件头)。节点按自己的 history 记;组按当时选中的节点记(见 recordGroup)
-  // dedupeMsOf(name):这个名字的组记录去重窗口(节点取用到它的组里最短的 interval,
-  // 组取自己的 interval);不传就用 60 秒兜底
-  const recordFromProxies = (proxies, { kernelStartedAt = null, at = now(), dedupeMsOf = null } = {}) => {
-    const windowOf = (name) => (typeof dedupeMsOf === 'function' ? (dedupeMsOf(name) || 0) : 0)
+  const recordFromProxies = (proxies, { kernelStartedAt = null, at = now() } = {}) => {
     let changed = false
     const vanished = []
     let known = 0
     for (const [name, proxy] of Object.entries(proxies || {})) {
       if (!proxy || typeof proxy !== 'object') continue
       if (Array.isArray(proxy.all) && proxy.all.length) {
-        if (recordGroup(proxies, name, proxy, { kernelStartedAt, at, dedupeMs: windowOf(name) })) changed = true
+        if (recordGroup(proxies, name, proxy, { kernelStartedAt, at })) changed = true
         continue
       }
       const history = proxy.history
       if (Array.isArray(history) && history.length) {
-        if (record(name, history[history.length - 1], windowOf(name))) changed = true
+        if (record(name, history[history.length - 1])) changed = true
         continue
       }
       const list = cache[name]
@@ -193,13 +155,5 @@ export const createLatencyHistory = ({ store, now = () => Date.now() }) => {
     return removed
   }
 
-  const clearAiHistory = () => {
-    const removed = Object.values(aiCache).reduce((count, bucket) => count + Object.keys(bucket || {}).length, 0)
-    aiCache = {}
-    aiDirty = true
-    flush()
-    return removed
-  }
-
-  return { record, recordSamples, recordFromProxies, recordAiProbe, getAiForUrl, clearAiHistory, prune, get: () => cache, flush, updatedAt: () => updatedAt }
+  return { record, recordSamples, recordFromProxies, prune, get: () => cache, flush, updatedAt: () => updatedAt }
 }

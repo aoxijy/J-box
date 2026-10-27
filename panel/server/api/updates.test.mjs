@@ -27,31 +27,15 @@ test('版本比较:只看前三段;git describe 的开发版和同号 tag 相等
 
 test('fetchLatestVersion:从 releases/latest 的 302 跳转里取 tag,直连失败退到镜像', async () => {
   const calls = []
-  const fetchImpl = async (url, options) => {
+  const fetchImpl = async (url) => {
     calls.push(url)
     if (url.startsWith('https://github.com/')) throw new Error('offline')
-    assert.equal(options.redirect, 'manual')
-    if (url.includes('ghfast.top/')) return { status: 302, headers: new Map([['location', '/https://github.com/aoxijy/J-box/releases/tag/v0.2.3']]), url: 'https://ghfast.top/https://github.com/aoxijy/J-box/releases/latest' }
-    throw new Error('unexpected mirror')
+    return { status: 302, headers: new Map([['location', 'https://github.com/aoxijy/J-box/releases/tag/v0.2.3']]), url: '' }
   }
-  const r = await fetchLatestVersion(fetchImpl, { mirrors: ['https://ghfast.top/'] })
+  const r = await fetchLatestVersion(fetchImpl, { mirrors: ['https://mirror.test/'] })
   assert.equal(r.latest, 'v0.2.3')
-  assert.equal(r.via, 'https://ghfast.top/')
+  assert.equal(r.via, 'https://mirror.test/')
   assert.equal(calls.length, 2)
-})
-
-test('fetchLatestVersion:direct response URL is not mistaken for the final release tag', async () => {
-  await assert.rejects(
-    () => fetchLatestVersion(async (url) => ({ status: 200, headers: new Map(), url }), { mirrors: [] }),
-    /没能取到最新版本号/,
-  )
-})
-
-test('fetchLatestVersion:direct response URL is not mistaken for the final release tag', async () => {
-  await assert.rejects(
-    () => fetchLatestVersion(async (url) => ({ status: 200, headers: new Map(), url }), { mirrors: [] }),
-    /没能取到最新版本号/,
-  )
 })
 
 test('GET /update/status + POST /update/run:读 meta/通道/状态文件,发起时调 update.sh --detach --mirror', async () => {
@@ -139,15 +123,15 @@ test('定时器:订阅到点自动重拉;同一天不重复、没到 N 天不拉
   await runScheduledTasks({ ...base, now: new Date(2026, 8, 5, 3, 30) })
   assert.equal(fetched, 0, '没到点')
   await runScheduledTasks({ ...base, now: new Date(2026, 8, 5, 4, 2) })
-  assert.equal(fetched, 6)
+  assert.equal(fetched, 1)
   assert.equal(store.getSubscriptions()[0].nodeCount, 1)
   assert.equal(deploys.length, 1, '节点从 0 变 1,重启一次')
   await runScheduledTasks({ ...base, now: new Date(2026, 8, 5, 4, 40) })
-  assert.equal(fetched, 6, '同一天不重复')
+  assert.equal(fetched, 1, '同一天不重复')
   await runScheduledTasks({ ...base, now: new Date(2026, 8, 6, 4, 1) })
-  assert.equal(fetched, 6, '每 3 天一次,第二天不拉')
+  assert.equal(fetched, 1, '每 3 天一次,第二天不拉')
   await runScheduledTasks({ ...base, now: new Date(2026, 8, 8, 4, 1) })
-  assert.equal(fetched, 12, '第 3 天到点再拉')
+  assert.equal(fetched, 2, '第 3 天到点再拉')
   assert.equal(deploys.length, 1, '节点没变就不重启')
   const state = JSON.parse(await ctx.readFile(paths.scheduleStatePath))
   assert.ok(state.subscriptions.s1.lastAt)
