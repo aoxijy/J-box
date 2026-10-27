@@ -21,6 +21,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test stable release selection and failure handling
         run: python3 scripts/singbox-tcp-dns-hotfix/test_resolve_latest.py
+      - name: Test LuCI compatible-kernel candidates
+        run: node --test scripts/luci-compatible-kernel.test.cjs
       - name: Resolve official stable release once for all architectures
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -255,6 +257,7 @@ jobs:
           . scripts/singbox-tcp-dns-hotfix/versions.sh
           {
             echo "## J-Box ${{ github.ref_name }}"
+            echo "<!-- jbox-compatible-kernel:$SINGBOX_VERSION -->"
             echo ""
             echo "- sing-box 内核版本:\`$SINGBOX_VERSION\`(从本次仓库源码补丁构建，完整 CGO/musl 静态链接)"
             echo "- Node 运行时版本:\`$NODE_VERSION\`(musl 构建,glibc 版本在 OpenWrt 上无法运行)"
