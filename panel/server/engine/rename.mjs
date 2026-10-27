@@ -195,7 +195,7 @@ export const renameNodes = (nodes, options = {}) => {
     // 国别归属:地区词典的每一行都绑定一个国家代码(ISO 3166-1 alpha-2),命中哪行
     // 就把那行的代码挂在节点上。界面据此显示国旗,不必再从名字里倒推一次——名字是
     // 模板拼出来的,可能被手工改过、也可能带订阅名前缀,从它反推国家并不可靠。
-    const regionCode = region && region.code ? String(region.code).toUpperCase() : ''
+    const regionCode = region && region.code ? (String(region.code).startsWith('globe:') ? String(region.code).toLowerCase() : String(region.code).toUpperCase()) : ''
     // 识别出的地区名也挂在节点上:不改名时节点名里没有它,节点组按「美国」这类关键词选成员要靠它
     const recognizedRegion = region ? region.name : ''
     // regionRank 只用于排序,不进最终节点对象。兜底目录命中的排在用户词典的所有地区之后、

@@ -252,7 +252,7 @@ const toRegionRows = (dict: { code?: string; name: string; keywords: string[] }[
     id: makeId(),
     // 老档案里 code 存的是一个随机行号(那时它不表示国家),认不出来就退回按名字认
     // ——存的就是「香港」「美国」这些,正好能对上目录。两条都认不出才留空(自定义地区)。
-    code: findCountry(entry.code || '')?.code || findCountryByName(entry.name)?.code || '',
+    code: entry.code?.startsWith('globe:') ? entry.code : findCountry(entry.code || '')?.code || findCountryByName(entry.name)?.code || '',
     name: entry.name,
     keywordsText: entry.keywords.join(','),
   }))
@@ -263,6 +263,7 @@ const toRegionRows = (dict: { code?: string; name: string; keywords: string[] }[
 // 反过来,只要有一个词不属于上一个国家(用户自己加的),整行就不动——精心加过的
 // 关键词不该因为换个国家就没了。
 const pickCountry = (row: RegionRow, code: string) => {
+  if (code.startsWith('globe:')) { row.code = code; return }
   const country = findCountry(code)
   if (!country) return
   const previous = findCountry(row.code)

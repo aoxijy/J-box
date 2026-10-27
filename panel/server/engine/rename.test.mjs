@@ -74,14 +74,14 @@ test('renameNodes 序号按 区域+特征 组合独立递增', () => {
 test('renameNodes 未命中区域:归到"其他"并正常编号,不再把原名塞进 feature 位', () => {
   // 旧行为是 其他-火星基地-01:原名整个进 feature 位,而且原名当序号分组键,
   // 于是每个未识别节点各成一组、全都是 -01(真机上三条法国节点就是这样)。
-  const out = renameNodes([mk('火星基地'), mk('月球基地'), mk('🇦🇶南极01｜三网')])
+  const out = renameNodes([mk('火星基地'), mk('月球基地'), mk('🇦🇶南极01｜三网')], { regionDict: DEFAULT_REGION_DICT.filter((r) => !r.code.startsWith('globe:')) })
   assert.deepEqual(out.map((n) => n.tag), ['其他-01', '其他-02', '其他-03'])
 })
 
 // -------- 地区兜底目录(GitHub #6) --------
 
 test('订阅词典没命中的,按内置的全部国家目录再认一遍:马来西亚 / 泰国 / 印尼不再是「其他」', () => {
-  const out = renameNodes(['🇲🇾 Malaysia 01', 'Thailand 曼谷', '印尼-雅加达', '火星基地'].map(mk))
+  const out = renameNodes(['🇲🇾 Malaysia 01', 'Thailand 曼谷', '印尼-雅加达', '火星基地'].map(mk), { regionDict: DEFAULT_REGION_DICT.filter((r) => !r.code.startsWith('globe:')) })
   assert.deepEqual(out.map((n) => [n.tag, n.regionCode]), [
     ['马来西亚-01', 'MY'], ['泰国-01', 'TH'], ['印度尼西亚-01', 'ID'], ['其他-01', ''],
   ])
@@ -151,9 +151,9 @@ test('短码的 token 边界保护没有被削弱', () => {
   assert.deepEqual(matchRegion('US-Premium', dict), { code: 'US', name: '美国' })
 })
 
-test('默认地区词典里不再含无法输入的国旗字符', () => {
+test('单独国家的默认关键词不含国旗,聚合地区按用户要求保留国旗', () => {
   const flag = /[\u{1F1E6}-\u{1F1FF}]/u
-  for (const region of DEFAULT_REGION_DICT) {
+  for (const region of DEFAULT_REGION_DICT.filter((r) => !r.code.startsWith('globe:'))) {
     for (const kw of region.keywords) {
       assert.ok(!flag.test(kw), `${region.name} 的关键词 ${kw} 仍是国旗`)
     }
@@ -357,4 +357,13 @@ test('enabled=false:保留原始名字、不排序,前缀和手工改名照常,�
   // 开着时照旧改名 + 按地区排序,并同样带 regionName
   const on = renameNodes([mk('US-IEPL 02'), mk('HK-01 香港')])
   assert.deepEqual(on.map((n) => [n.tag, n.regionName]), [['美国-IEPL-01', '美国'], ['香港-01', '香港']])
+})
+
+test('亚洲和其他关键词命中,重命名后保留彩色地球图标代码', () => {
+  assert.equal(matchRegion('埼玉-01', DEFAULT_REGION_DICT).name, '亚洲')
+  assert.equal(matchRegion('Konghwaguk-01', DEFAULT_REGION_DICT).name, '其他')
+  const asia = DEFAULT_REGION_DICT.find((r) => r.name === '亚洲')
+  assert.ok(asia.keywords.includes('🇯🇵') && asia.keywords.includes('US'))
+  const node = renameNodes([mk('埼玉-01')])[0]
+  assert.equal(node.regionCode, 'globe:earth-asia')
 })

@@ -28,6 +28,8 @@ export const DEFAULT_REGION_DICT: JBoxRenameRegionEntry[] = [
   { code: 'DE', name: '德国', keywords: ['de', 'germany', '德国', '德國', '法兰克福', '法蘭克福'] },
   // 回国 / 中转类节点。排最后:带地区词的节点(「美国 CN2 GIA」)先命中前面的地区
   { code: 'CN', name: '中国', keywords: ['cn', 'china', '中国', '中國', '回国', '回國', 'back to china'] },
+  {"code": "globe:earth-asia", "name": "亚洲", "keywords": ["台湾", "TW", "美", "US", "日本", "JP", "川日", "东京", "大阪", "泉日", "埼玉", "沪日", "深日", "🇯🇵", "Japan", "新加坡", "SG", "坡", "狮城", "🇸🇬", "韩国", "KR", "首尔", "春川", "🇰🇷", "Korea"]},
+  {"code": "globe:earth-americas", "name": "其他", "keywords": ["波", "柬", "尼", "也", "克", "比", "尔", "立", "冰", "秘", "耳", "利", "埃", "希", "孟", "芬", "愛", "澳", "英", "德", "南", "意", "法", "拿", "墨", "印", "越", "俄", "瑞", "智", "荷", "比", "巴", "沙", "班", "泰", "德", "烏", "以", "Australia", "Konghwaguk"]},
 ]
 
 // 特征改成扁平关键词表:命中哪个词就把那个词本身(转大写)写进节点名,
