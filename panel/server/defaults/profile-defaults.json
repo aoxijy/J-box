@@ -14,7 +14,7 @@
       {
         "id": "aoxi-ai-platform",
         "name": "🤖 AI平台",
-        "default": "proxy",
+        "default": "🕸️ CHATGPT自动",
         "rulesets": [],
         "ruleUrls": [
           "https://github.com/aoxijy/guize/releases/latest/download/ai-platform-domain.srs",
@@ -160,7 +160,7 @@
       {
         "id": "aoxi-social-chat",
         "name": "📲 社交聊天",
-        "default": "proxy",
+        "default": "♻️ 香港自动",
         "rulesets": [],
         "ruleUrls": [
           "https://github.com/aoxijy/guize/releases/latest/download/social-chat-domain.srs",
@@ -174,7 +174,7 @@
       {
         "id": "aoxi-developer-platform",
         "name": "💻 开发平台",
-        "default": "proxy",
+        "default": "♻️ 香港自动",
         "rulesets": [],
         "ruleUrls": [
           "https://github.com/aoxijy/guize/releases/latest/download/developer-platform-domain.srs",
@@ -188,7 +188,7 @@
       {
         "id": "aoxi-microsoft-apple",
         "name": "Ⓜ️ 微软苹果",
-        "default": "proxy",
+        "default": "♻️ 香港自动",
         "rulesets": [],
         "ruleUrls": [
           "https://github.com/aoxijy/guize/releases/latest/download/microsoft-apple-domain.srs",
@@ -202,7 +202,7 @@
       {
         "id": "aoxi-foreign-media",
         "name": "🎥 国外媒体",
-        "default": "proxy",
+        "default": "♻️ 香港自动",
         "rulesets": [],
         "ruleUrls": [
           "https://github.com/aoxijy/guize/releases/latest/download/foreign-media-domain.srs",
@@ -229,7 +229,7 @@
       }
     ],
     "adBlock": false,
-    "fallbackDefault": "proxy",
+    "fallbackDefault": "♻️ 香港自动",
     "fallbackName": "🐟 漏网之鱼",
     "fallbackIcon": "globe:generic"
   }

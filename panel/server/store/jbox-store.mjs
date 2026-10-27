@@ -1,7 +1,7 @@
 import { migrateDefaultProfile } from '../system/seed-defaults.mjs'
 import { randomBytes } from 'node:crypto'
 import { BUILTIN_REGIONS } from '../engine/routing-model.mjs'
-import { defaultGroups, normalizeGroups } from '../engine/user-groups.mjs'
+import { defaultGroups, migrateDefaultGroups, normalizeGroups } from '../engine/user-groups.mjs'
 import { DEFAULT_DIRECT_TEST_URL, DEFAULT_TEST_URL } from '../engine/test-url.mjs'
 
 export const KEYS = {
@@ -204,7 +204,14 @@ export const createStore = ({ get, set, del }, { randomHex = defaultRandomHex } 
     if (raw) {
       try {
         const list = JSON.parse(raw)
-        if (Array.isArray(list)) return normalizeGroups(list)
+        if (Array.isArray(list)) {
+          const migrated = migrateDefaultGroups(list)
+          if (migrated !== list) {
+            if (!get('jbox/groups-before-aoxi-v1')) set('jbox/groups-before-aoxi-v1', raw)
+            set(KEYS.groups, JSON.stringify(normalizeGroups(migrated)))
+          }
+          return normalizeGroups(migrated)
+        }
       } catch { /* 落到下面的默认值 */ }
     }
     const seeded = normalizeGroups(defaultGroups())

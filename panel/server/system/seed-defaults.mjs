@@ -72,7 +72,7 @@ export const seedDefaultStorage = ({ countConfigEntries, insert, hasKey = () => 
 // 只升级完全未改过的 v0.1.186 默认分流,用户自定义过的档案保持原样。
 export const migrateDefaultProfile = (profile) => {
   if (!profile || typeof profile !== 'object') return profile
-  const previous = ['profile-defaults-v186.json', 'profile-defaults-aoxi-v1.json'].map(loadProfileDefaultsFromLegacy)
+  const previous = ['profile-defaults-v186.json', 'profile-defaults-aoxi-v1.json', 'profile-defaults-aoxi-v2.json'].map(loadProfileDefaultsFromLegacy)
   if (!previous.some((p) => p && isDeepStrictEqual(profile.routing, p.routing))) return profile
   const next = loadProfileDefaults()
   return next ? { ...profile, routing: next.routing } : profile

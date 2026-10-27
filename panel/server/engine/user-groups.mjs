@@ -96,7 +96,7 @@ export const idleTimeoutFor = (idleTimeout, interval) => {
 
 // 两个开箱即用的组:一份自动择优、一份手动指定,成员都是"当前所有有效节点"。
 // allNodes 是动态的——订阅刷新后节点变了,组的成员跟着变,不需要用户回来重新勾一遍。
-export const defaultGroups = () => ([
+const legacyDefaultGroups = () => ([
   builtinDefaults()[0],
   {
     id: 'all-auto',
@@ -123,6 +123,31 @@ export const defaultGroups = () => ([
   },
   builtinDefaults()[1],
 ])
+
+// 与 aoxi888.yaml 的节点组一致;按原始节点名和重命名后的地区动态收编新订阅。
+export const defaultGroups = () => {
+  const auto = (id, name, keywords = [], extra = {}) => ({
+    id, name, type: 'urltest', mode: 'dynamic', icon: 'globe:earth-asia',
+    keywords, members: [], enabled: true, interval: '180s', tolerance: 100,
+    testUrl: 'https://www.gstatic.com/generate_204', idleTimeout: DEFAULT_IDLE_TIMEOUT, ...extra,
+  })
+  return [
+    builtinDefaults()[0],
+    auto('aoxi-chatgpt-auto', '🕸️ CHATGPT自动', ['美国', '其他', 'US', 'United States'], { interval: '300s', tolerance: 200, testUrl: 'http://chatgpt.com/cdn-cgi/trace' }),
+    { id: 'aoxi-node-select', name: '🚀 节点选择', icon: 'globe:earth-asia', type: 'selector', mode: 'static', keywords: [], members: ['♻️ 自动选择', '💁 所有手动', '直连'], enabled: true },
+    { id: 'all-manual', name: '💁 所有手动', type: 'selector', mode: 'dynamic', icon: 'globe:earth-meridians', keywords: [], members: [], enabled: true },
+    auto('all-auto', '♻️ 自动选择'),
+    auto('aoxi-hk-auto', '♻️ 香港自动', ['香港', 'HK', 'Hong Kong'], { icon: 'HK' }),
+    auto('aoxi-asia-auto', '♻️ 亚洲自动', ['亚洲', '日本', '新加坡', '台湾', '韩国', 'JP', 'SG', 'TW', 'KR', 'Asia', 'Japan', 'Singapore', 'Taiwan', 'Korea']),
+    auto('aoxi-us-auto', '♻️ 美国自动', ['美国', 'US', 'United States'], { icon: 'US' }),
+    auto('aoxi-other-auto', '♻️ 其他自动', ['其他']),
+    builtinDefaults()[1],
+  ]
+}
+
+// 仅迁移完全未修改的旧默认节点组;自建组保留。
+export const migrateDefaultGroups = (list) =>
+  JSON.stringify(normalizeGroups(list)) === JSON.stringify(normalizeGroups(legacyDefaultGroups())) ? defaultGroups() : list
 
 const isNonEmptyString = (v) => typeof v === 'string' && v.trim().length > 0
 

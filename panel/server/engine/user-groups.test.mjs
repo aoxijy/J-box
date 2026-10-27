@@ -118,26 +118,21 @@ test('故障转移:别的组可以把故障转移父组当成员,但拿不到内
   assert.deepEqual(outbounds.find((o) => o.tag === '手动').outbounds, ['主备'])
 })
 
-test('默认两个组:所有-自动(urltest) 与 所有-手动(selector),成员都是全部节点', () => {
+test('样板节点组:成员动态更新,地区筛选与测速参数一致', () => {
   const { outbounds, dropped } = emitUser(defaultGroups(), nodes)
   assert.equal(dropped.length, 0)
-  assert.deepEqual(outbounds.map((o) => [o.tag, o.type]), [
-    ['所有-自动', 'urltest'],
-    ['所有-手动', 'selector'],
-  ])
-  assert.deepEqual(outbounds[0].outbounds, ['香港-01', '香港-02', '美国-01'])
-  assert.equal(outbounds[0].interval, '300s')
-  assert.equal(outbounds[0].tolerance, 100)
-  // selector 不该带 urltest 才有的字段
-  assert.equal(outbounds[1].interval, undefined)
-  assert.equal(outbounds[1].tolerance, undefined)
-})
-
-test('allNodes 是动态的:节点变了,组的成员跟着变', () => {
-  const before = emitUser(defaultGroups(), nodes).outbounds[0].outbounds
-  const after = emitUser(defaultGroups(), [{ tag: '新节点' }]).outbounds[0].outbounds
-  assert.equal(before.length, 3)
-  assert.deepEqual(after, ['新节点'])
+  const find = (name) => outbounds.find((o) => o.tag === name)
+  assert.deepEqual(find('♻️ 自动选择').outbounds, ['香港-01', '香港-02', '美国-01'])
+  assert.deepEqual(find('💁 所有手动').outbounds, ['香港-01', '香港-02', '美国-01'])
+  assert.deepEqual(find('♻️ 香港自动').outbounds, ['香港-01', '香港-02'])
+  assert.deepEqual(find('🕸️ CHATGPT自动').outbounds, ['美国-01'])
+  assert.equal(find('🕸️ CHATGPT自动').interval, '300s')
+  assert.equal(find('🕸️ CHATGPT自动').tolerance, 200)
+  assert.equal(find('🕸️ CHATGPT自动').url, 'http://chatgpt.com/cdn-cgi/trace')
+  assert.equal(find('♻️ 自动选择').interval, '180s')
+  assert.equal(find('♻️ 自动选择').tolerance, 100)
+  assert.equal(find('💁 所有手动').interval, undefined)
+  assert.deepEqual(emitUser(defaultGroups(), [{ tag: '新节点' }]).outbounds.find((o) => o.tag === '♻️ 自动选择').outbounds, ['新节点'])
 })
 
 // 以下三条是 sing-box check 挡不住、必须由生成器自己保证的(见模块头注释)
@@ -286,11 +281,9 @@ test('图标不进 sing-box 出站:那边没有这个字段', () => {
   assert.ok(!('icon' in outbounds[0]), '出站里不该出现 icon')
 })
 
-test('默认列表:直连、拒绝两个内置出站在前,两个默认组自带地球图标', () => {
-  assert.deepEqual(
-    defaultGroups().map((g) => [g.name, g.icon]),
-    [['直连', 'misc:dart'], ['所有-自动', 'globe:earth-asia'], ['所有-手动', 'globe:earth-meridians'], ['拒绝', 'misc:cross']],
-  )
+test('默认列表与 YAML 的八个节点组同名同序,保留两个内置出站', () => {
+  assert.deepEqual(defaultGroups().map((g) => g.name), ['直连', '🕸️ CHATGPT自动', '🚀 节点选择', '💁 所有手动', '♻️ 自动选择', '♻️ 香港自动', '♻️ 亚洲自动', '♻️ 美国自动', '♻️ 其他自动', '拒绝'])
+  assert.ok(defaultGroups().every((g) => g.icon))
 })
 
 // -------- 内置出站:直连 / 拒绝 --------
