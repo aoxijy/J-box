@@ -24,7 +24,7 @@ test('matchRegion 短 ASCII 码需 token 边界,避免子串误配(修复4)', ()
   assert.equal(matchRegion('Russia-01', DEFAULT_REGION_DICT), null)
   assert.equal(matchRegion('Sweden', DEFAULT_REGION_DICT), null)
   assert.equal(matchRegion('Ukraine', DEFAULT_REGION_DICT), null)
-  assert.equal(matchRegion('Australia', DEFAULT_REGION_DICT), null)
+  assert.equal(matchRegion('Australia', DEFAULT_REGION_DICT).name, '其他')
   // 既有断言不回归
   assert.equal(matchRegion('US-CA-01', DEFAULT_REGION_DICT).name, '美国')
   assert.equal(matchRegion('洛杉矶 03', DEFAULT_REGION_DICT).name, '美国')
