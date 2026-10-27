@@ -3,6 +3,7 @@
 // 里还没有任何 config/* 时把它们写进去,新装用户打开面板就是这套主题、圆角、透明度和背景。
 // 已经在用的安装(有 config/*)一律不动。
 import fs from 'node:fs'
+import { isDeepStrictEqual } from 'node:util'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -31,12 +32,8 @@ export const loadStorageDefaults = (dir = DEFAULTS_DIR) => {
   return { entries, background }
 }
 
-// 随包的默认档案(server/defaults/profile-defaults.json):目前只带 routing——一套现成的
-// 目标分流(AI / Youtube / TikTok / Netflix / Github / Google / Microsoft / Apple / Games /
-// 国外 / 国内 + 兜底「其他」),取自正式路由器上长期在用的那份。兜底走直连、「国外」带
-// gfw 被墙域名表:没被站点集挑走的默认不占节点流量。各站点集的出口存的是占位符
-// 'proxy'(= 成员表里的第一个节点组)或 'direct',新装机器上没有作者那些节点组也能用。
-// 只在全新安装时写入(还没有任何 config/*,也没有 jbox/profile),已经在用的安装一律不动。
+// 随包目标分流按 aoxi888.yaml 的首条命中顺序排列,规则集使用 guize 的二进制 SRS。
+// 手工拦截在前,未命中走「漏网之鱼」;已有自定义档案不覆盖。
 export const PROFILE_KEY = 'jbox/profile'
 
 export const loadProfileDefaults = (dir = DEFAULTS_DIR) => {
@@ -70,4 +67,17 @@ export const seedDefaultStorage = ({ countConfigEntries, insert, hasKey = () => 
   }
   if (seeded || profile) log(`[defaults] 全新安装:写入 ${seeded} 项默认面板设置${background ? '(含背景图)' : ''}${profile ? `,以及默认目标分流(${profileDefaults.routing.policies.length} 个站点集)` : ''}`)
   return { seeded, profile }
+}
+
+// 只升级完全未改过的 v0.1.186 默认分流,用户自定义过的档案保持原样。
+export const migrateDefaultProfile = (profile) => {
+  if (!profile || typeof profile !== 'object') return profile
+  const previous = loadProfileDefaultsFromLegacy()
+  if (!previous || !isDeepStrictEqual(profile.routing, previous.routing)) return profile
+  const next = loadProfileDefaults()
+  return next ? { ...profile, routing: next.routing } : profile
+}
+const loadProfileDefaultsFromLegacy = () => {
+  try { return JSON.parse(fs.readFileSync(path.join(DEFAULTS_DIR, 'profile-defaults-v186.json'), 'utf8')) }
+  catch { return null }
 }

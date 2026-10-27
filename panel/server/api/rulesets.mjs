@@ -1,6 +1,6 @@
 import express from 'express'
-import { loadRuleList } from '../system/rule-lists.mjs'
-import { normalizeRouting } from '../engine/routing-model.mjs'
+import { loadRuleList, readRuleListShapes } from '../system/rule-lists.mjs'
+import { normalizeRouting, routeRulesetTags } from '../engine/routing-model.mjs'
 import { rulesetPath, isSafeRulesetTag } from '../system/rulesets.mjs'
 
 // 「详情」:一个 geosite/geoip 分类里到底有哪些域名/IP。
@@ -70,8 +70,9 @@ const buildPolicyEntries = async (ctx, paths, policy, fetchImpl) => {
   for (const [type, list] of [['domain', policy.domain], ['domain_suffix', policy.domainSuffix], ['domain_keyword', policy.domainKeyword], ['ip_cidr', policy.ipCidr]]) {
     for (const value of list || []) out.push({ type, family: FAMILY_OF(type), content: value, source: CUSTOM_SOURCE })
   }
-  for (const tag of policy.rulesets || []) {
-    if (!isSafeRulesetTag(tag) || !/^(geosite|geoip)-/.test(tag)) { missing.push(tag); continue }
+  const shapes = await readRuleListShapes(ctx, paths)
+  for (const tag of routeRulesetTags(policy, shapes)) {
+    if (!isSafeRulesetTag(tag) || !/^(geosite-|geoip-|list-)/.test(tag)) { missing.push(tag); continue }
     try {
       for (const e of await loadEntries(ctx, paths, tag, fetchImpl)) {
         out.push({ type: e.type, family: FAMILY_OF(e.type), content: e.value, source: tag })
@@ -148,7 +149,7 @@ export const registerRulesetRoutes = (app, { ctx, paths, store, fetchImpl = glob
       if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
         entries = hit.entries
       } else {
-        const parsed = await loadRuleList(fetchImpl, url)
+        const parsed = await loadRuleList(fetchImpl, url, { ctx, paths })
         entries = []
         for (const [type, values] of Object.entries(parsed)) for (const value of values) entries.push({ type, value })
         cache.set(key, { entries, at: Date.now() })
@@ -170,7 +171,7 @@ export const registerRulesetRoutes = (app, { ctx, paths, store, fetchImpl = glob
       return res.status(400).json({ message: '规则集链接必须是 http(s) 网址' })
     }
     try {
-      const parsed = await loadRuleList(fetchImpl, url)
+      const parsed = await loadRuleList(fetchImpl, url, { ctx, paths })
       const entries = []
       for (const [type, values] of Object.entries(parsed)) {
         for (const value of values) entries.push({ type, value })
@@ -184,8 +185,8 @@ export const registerRulesetRoutes = (app, { ctx, paths, store, fetchImpl = glob
   // GET /api/jbox/rulesets/entries?tag=geosite-cn&q=&offset=0&limit=50
   router.get('/rulesets/entries', async (req, res) => {
     const tag = String(req.query.tag || '')
-    // 只认官方那两个前缀:tag 会被拼成下载地址和本地文件名,这里是它进系统的入口
-    if (!isSafeRulesetTag(tag) || !/^(geosite|geoip)-/.test(tag)) {
+    // 只接受 Geo 分类和本地规则集链接的安全 tag,防止拼出目录穿越路径
+    if (!isSafeRulesetTag(tag) || !/^(geosite-|geoip-|list-)/.test(tag)) {
       return res.status(400).json({ message: `不合法的规则集名:${tag}` })
     }
     const q = String(req.query.q || '').trim().toLowerCase()

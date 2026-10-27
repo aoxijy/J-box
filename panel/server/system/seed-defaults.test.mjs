@@ -46,8 +46,12 @@ test('全新安装同时写入默认档案(目标分流);已有 jbox/profile 或
   const defaults = loadProfileDefaults()
   assert.ok(defaults && defaults.routing && defaults.routing.policies.length >= 5, '随包的 profile-defaults.json 要有一套站点集')
   const names = defaults.routing.policies.map((p) => p.name)
-  for (const n of ['AI', 'Youtube', 'Google', 'Microsoft', 'Apple', 'Games', '国内']) assert.ok(names.includes(n), n)
-  assert.equal(defaults.routing.fallbackName, '其他')
+  assert.deepEqual(names, ['🤖 AI平台', '🛑 全球拦截', '📲 社交聊天', '💻 开发平台', 'Ⓜ️ 微软苹果', '🎥 国外媒体', '🎯 全球直连'])
+  assert.equal(defaults.routing.fallbackName, '🐟 漏网之鱼')
+  assert.equal(defaults.routing.fallbackDefault, 'proxy')
+  assert.equal(defaults.routing.custom.rules.length, 116)
+  assert.equal(defaults.routing.policies.flatMap((p) => p.ruleUrls).length, 13)
+  assert.ok(defaults.routing.policies.every((p) => p.ruleUrls.every((u) => u.endsWith('.srs'))))
   // 不带任何个人域名
   // 默认档案取自作者自己的路由器,发出去之前必须把个人域名摘干净
   const PERSONAL = /angeworld|opendoor|superdoor|wanhouse|wan\.family|ok1248/

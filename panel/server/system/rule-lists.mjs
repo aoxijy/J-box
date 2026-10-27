@@ -6,13 +6,16 @@
 //   · 文本名单 —— Clash 的 DOMAIN-SUFFIX,xxx 那种,或者一行一个域名(engine/rule-list.mjs)
 //   · mihomo 的 .mrs —— 整份 zstd,里面是二进制的域名树 / IP 区间(engine/mrs.mjs)。
 //     内核自己不认这个格式(`sing-box rule-set convert` 只会转 adguard),所以在这里解开。
-// 两条路解析出来的形状一样,后面编译、引用、部署完全共用。
+//   · sing-box 的 .srs —— 用内核解码,保留域名/IP 条件并拆分 DNS 与路由引用。
+// 三条路解析出来的形状一样,后面编译、引用、部署完全共用。
 //
 // 失败的处理分两种:
 //   · 本地已经有编好的那份 —— 拉不动就用旧的,记一条日志。名单在别人服务器上,不该
 //     因为对方今天抽风就让整次部署失败(用户可能只是改了个节点)。
 //   · 本地没有 —— 那这个站点集的规则在内核里就是空的,必须让部署停下来说清楚,
 //     否则内核会在校验阶段报 "open .../list-xxxxxxxx.srs: no such file or directory"。
+import { randomUUID, createHash } from 'node:crypto'
+import fs from 'node:fs/promises'
 import { zstdDecompressSync } from 'node:zlib'
 import { collectRuleListUrls } from '../engine/routing-model.mjs'
 import { decodeMrs, looksLikeZstd } from '../engine/mrs.mjs'
@@ -111,7 +114,39 @@ export const parseRuleListBody = (buf) => {
   return decodeMrs(payload).parsed
 }
 
-export const loadRuleList = async (fetchImpl, url) => parseRuleListBody(await fetchRuleList(fetchImpl, url))
+// SRS 交给同版本内核解码,拒绝带逻辑/反选等无法保持语义的复杂规则。
+export const parseSrsSource = (source) => {
+  const parsed = { domain: [], domain_suffix: [], domain_keyword: [], domain_regex: [], ip_cidr: [] }
+  if (!Array.isArray(source?.rules)) throw new Error('SRS 缺少 rules')
+  for (const rule of source.rules) {
+    if (!rule || typeof rule !== 'object') throw new Error('SRS 规则格式无效')
+    for (const [key, value] of Object.entries(rule)) {
+      if (key === 'type' && value === 'default') continue
+      if (!(key in parsed)) throw new Error(`SRS 暂不支持条件 ${key},不能安全转换为域名/IP 名单`)
+      const values = [].concat(value)
+      if (!values.every((v) => typeof v === 'string' && v.length)) throw new Error(`SRS 条件 ${key} 无效`)
+      parsed[key].push(...values)
+    }
+  }
+  return parsed
+}
+
+export const loadRuleList = async (fetchImpl, url, { ctx, paths } = {}) => {
+  const body = await fetchRuleList(fetchImpl, url)
+  if (body.subarray(0, 3).toString('ascii') !== 'SRS') return parseRuleListBody(body)
+  if (!ctx || !paths) throw new Error('读取 SRS 需要 sing-box 内核')
+  const prefix = `${paths.dataDir}/tmp/srs-${randomUUID()}`
+  await ctx.mkdirp(`${paths.dataDir}/tmp`)
+  try {
+    await ctx.writeFileBinary(`${prefix}.srs`, body)
+    const r = await ctx.exec(paths.singbox, ['rule-set', 'decompile', '--output', `${prefix}.json`, `${prefix}.srs`])
+    if (r.code !== 0) throw new Error(`解码 SRS 失败:${(r.stderr || '').trim() || `exit ${r.code}`}`)
+    return parseSrsSource(JSON.parse(await ctx.readFile(`${prefix}.json`)))
+  } finally {
+    await ctx.remove(`${prefix}.srs`)
+    await ctx.remove(`${prefix}.json`)
+  }
+}
 
 // 一份源格式 → 一份 .srs。写临时源文件、编译、删临时文件。
 const compileSrs = async (ctx, paths, tag, parsed) => {
@@ -149,7 +184,7 @@ const compileParsed = async (ctx, paths, tag, parsed) => {
 
 // 一个链接 → 拉回来、解析、编译
 const compileOne = async (ctx, paths, { url, tag }, fetchImpl) =>
-  compileParsed(ctx, paths, tag, await loadRuleList(fetchImpl, url))
+  compileParsed(ctx, paths, tag, await loadRuleList(fetchImpl, url, { ctx, paths }))
 
 // 老版式的本地文件(域名 IP 混在一份 list-xxx.srs 里)不用重新下:用内核解回源格式,再拆成
 // 两份编译。这样升级后第一次部署就能拿到拆好的文件,不依赖外网(路由器拉 GitHub 未必通);
@@ -174,6 +209,28 @@ const resplitLegacy = async (ctx, paths, tag) => {
   return compileParsed(ctx, paths, tag, parsed)
 }
 
+// 包内快照供首次离线部署使用。只接受清单里的 URL,校验 SHA256 后再落盘;
+// 24 小时后沿用既有更新流程,下载失败仍能使用这份本地文件。
+const seedBundledLists = async (ctx, paths, wanted, state, now) => {
+  const defaults = new URL('../defaults/', import.meta.url)
+  let bundled
+  try { bundled = JSON.parse(await fs.readFile(new URL('rule-lists.json', defaults), 'utf8')) }
+  catch { return }
+  for (const { url, tag } of wanted) {
+    const entry = bundled[url]
+    if (!entry || !/^[a-z0-9-]+\.srs$/.test(entry.file)) continue
+    if (await ctx.exists(`${paths.rulesetDir}/${tag}.srs`) || await ctx.exists(`${paths.rulesetDir}/${ruleListIpTag(tag)}.srs`)) continue
+    const shape = ruleListShape(entry.counts)
+    if (shape.domain === shape.ip) continue // 快照必须只有域名或只有 IP,绝不混进 DNS
+    const body = await fs.readFile(new URL(`rulesets/${entry.file}`, defaults))
+    if (createHash('sha256').update(body).digest('hex') !== entry.sha256) throw new Error(`包内规则集校验失败:${entry.file}`)
+    await ctx.mkdirp(paths.rulesetDir)
+    const target = shape.ip ? ruleListIpTag(tag) : tag
+    await ctx.writeFileBinary(`${paths.rulesetDir}/${target}.srs`, body)
+    state[tag] = { url, at: now(), counts: entry.counts, split: SPLIT_VERSION }
+  }
+}
+
 // 部署前、生成配置之前调一次:把档案里引用到的规则集链接补齐。
 // 已经有、且没到重下时间的跳过;拉不动但本地有旧的就用旧的。
 // 返回的 lists 是形状表 { [tag]: { domain, ip } }:每条链接编成了哪几份 .srs,生成配置时
@@ -189,6 +246,7 @@ export const ensureRuleLists = async (
   if (!wanted.length) return { ok: true, updated: [], failed: [], lists: {} }
 
   const state = await readState(ctx, paths)
+  await seedBundledLists(ctx, paths, wanted, state, now)
   const next = {}
   const updated = []
   const failed = []

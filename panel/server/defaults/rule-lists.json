@@ -1,0 +1,100 @@
+{
+  "https://github.com/aoxijy/guize/releases/latest/download/ai-platform-domain.srs": {
+    "file": "ai-platform-domain.srs",
+    "sha256": "f975f7de762caccc4074563fb7564e1b95b4c96fb4d6a4a1d42e7c7d5bcb586f",
+    "counts": {
+      "domain": 22,
+      "domain_suffix": 59
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/ai-platform-ipcidr.srs": {
+    "file": "ai-platform-ipcidr.srs",
+    "sha256": "6c31e9e5f835cb84968187464cd3d2f66001bd1fe7a54a518884fdd28c74291e",
+    "counts": {
+      "ip_cidr": 2
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/reject-domain.srs": {
+    "file": "reject-domain.srs",
+    "sha256": "c3fbff9f45ebd7ec78f8f1242035f6616bd0a8af21e3ca48e694fcb82edb97ab",
+    "counts": {
+      "domain": 2,
+      "domain_suffix": 158
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/social-chat-domain.srs": {
+    "file": "social-chat-domain.srs",
+    "sha256": "9d1d8c1020fbce38255b344f7f8ae61796617d996e0089b441064e699933ad24",
+    "counts": {
+      "domain": 7,
+      "domain_suffix": 806
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/social-chat-ipcidr.srs": {
+    "file": "social-chat-ipcidr.srs",
+    "sha256": "1e84f2cb3e0f70bcba58040556f3db65472d275f6f50dd263f89a5309419ee98",
+    "counts": {
+      "ip_cidr": 70
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/developer-platform-domain.srs": {
+    "file": "developer-platform-domain.srs",
+    "sha256": "30fd1d04c23e3efc91a9bbca83cf9613683d051be160edea4e2c8f9411d669b3",
+    "counts": {
+      "domain": 3,
+      "domain_suffix": 130
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/developer-platform-ipcidr.srs": {
+    "file": "developer-platform-ipcidr.srs",
+    "sha256": "94b67131e0585d5c941361fb7b02f918404f99c327607f67bfd7090608cabc54",
+    "counts": {
+      "ip_cidr": 22
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/microsoft-apple-domain.srs": {
+    "file": "microsoft-apple-domain.srs",
+    "sha256": "cb16f1dfa23c9a2f8fd2b6a7aca97eecc2bc7e4834cafaf5c285d847dc6cde20",
+    "counts": {
+      "domain": 13,
+      "domain_suffix": 2220
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/microsoft-apple-ipcidr.srs": {
+    "file": "microsoft-apple-ipcidr.srs",
+    "sha256": "affd5bb7d215d7c8d6ca6447f37972f1870aa2604f494b392cd2f624670a7e41",
+    "counts": {
+      "ip_cidr": 13
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/foreign-media-domain.srs": {
+    "file": "foreign-media-domain.srs",
+    "sha256": "fa1f5d127b2a26edb29d05d94ac9a854f06f7f7764fa90c759551a65329c4465",
+    "counts": {
+      "domain": 143,
+      "domain_suffix": 33976
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/foreign-media-ipcidr.srs": {
+    "file": "foreign-media-ipcidr.srs",
+    "sha256": "e2dcd8aba9c3d1d1cd6bd55d25efc9f75e799e3ea46d762de8a04d3d68aa1754",
+    "counts": {
+      "ip_cidr": 1223
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/direct-domain.srs": {
+    "file": "direct-domain.srs",
+    "sha256": "fa3d39ff1b436d986502e490114df9b76b5d62aa78220e6facccb0beab2849c6",
+    "counts": {
+      "domain": 54,
+      "domain_suffix": 2192
+    }
+  },
+  "https://github.com/aoxijy/guize/releases/latest/download/direct-ipcidr.srs": {
+    "file": "direct-ipcidr.srs",
+    "sha256": "d264b584395a1df536ceb5e11a4e89d909163d75afcd4ba89b29407ba37f9bc4",
+    "counts": {
+      "ip_cidr": 7103
+    }
+  }
+}

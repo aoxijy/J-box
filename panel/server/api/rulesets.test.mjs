@@ -26,10 +26,10 @@ const okCtx = (over = {}) => createMockContext({
   },
 })
 
-const startApp = async (ctx, fetchImpl) => {
+const startApp = async (ctx, fetchImpl, store) => {
   clearRulesetEntriesCache()
   const app = express()
-  registerRulesetRoutes(app, { ctx, paths, fetchImpl })
+  registerRulesetRoutes(app, { ctx, paths, fetchImpl, store })
   const server = app.listen(0)
   await new Promise((resolve, reject) => {
     server.once('listening', resolve)
@@ -188,4 +188,27 @@ test('GET /rulesets/preview:按网址拉回来解析,形状和 /rulesets/entries
   } finally {
     await new Promise((r) => server.close(r))
   }
+})
+
+test('SRS 站点集详情读取本地的域名与 IP 两份文件', async () => {
+  const { listTagForUrl } = await import('../engine/rule-list.mjs')
+  const url = 'https://example.com/rules.srs'
+  const tag = listTagForUrl(url)
+  const ctx = createMockContext({ files: {
+    [`${paths.dataDir}/rule-lists.json`]: JSON.stringify({ [tag]: { split: 2, counts: { domain: 1, ip_cidr: 1 } } }),
+    [`${paths.rulesetDir}/${tag}.srs`]: 'SRS-domain',
+    [`${paths.rulesetDir}/${tag}-ip.srs`]: 'SRS-ip',
+    [`${paths.dataDir}/tmp/${tag}.json`]: JSON.stringify({ rules: [{ domain: 'example.com' }] }),
+    [`${paths.dataDir}/tmp/${tag}-ip.json`]: JSON.stringify({ rules: [{ ip_cidr: '1.2.3.0/24' }] }),
+  } })
+  const store = { getProfile: () => ({ routing: { policies: [{ name: '示例', ruleUrls: [url] }] } }) }
+  const { baseUrl, close } = await startApp(ctx, async () => { throw new Error('must stay offline') }, store)
+  try {
+    const response = await fetch(`${baseUrl}/api/jbox/policies/entries?name=${encodeURIComponent('示例')}`)
+    assert.equal(response.status, 200)
+    const body = await response.json()
+    assert.equal(body.total, 2)
+    assert.deepEqual(body.missing, [])
+    assert.deepEqual(body.counts, { all: 2, domain: 1, ip: 1 })
+  } finally { await close() }
 })

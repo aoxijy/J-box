@@ -1,49 +1,606 @@
 {
   "routing": {
     "proxyTag": "PROXY",
-    "regions": [
-      {
-        "id": "cn",
-        "name": "中国大陆",
-        "rulesets": [
-          "geosite-cn",
-          "geoip-cn"
-        ],
-        "target": "direct",
-        "fallback": "proxy"
-      },
-      {
-        "id": "hkmo",
-        "name": "香港澳门",
-        "rulesets": [],
-        "target": "direct",
-        "fallback": "direct"
-      },
-      {
-        "id": "other",
-        "name": "其他地区",
-        "rulesets": [
-          "geosite-cn",
-          "geoip-cn"
-        ],
-        "target": "proxy",
-        "fallback": "direct"
-      }
-    ],
-    "regionMode": "CN",
     "outboundOptions": {
       "direct": true,
       "reject": true,
       "groups": true
     },
+    "custom": {
+      "name": "前置自定义分流",
+      "enabled": true,
+      "rules": [
+        {
+          "type": "domainSuffix",
+          "value": "lcs-cops.adobe.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domainSuffix",
+          "value": "adobe.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domainSuffix",
+          "value": "adobestats.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "crs.cr.adobe.com",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "prod.adobegenuine.com",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "workflow.licenses.adobe.com",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "workflow-stage.licenses.adobe.com",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "04wa9s2dgn2.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "1sp2ppw5g0.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "3bziuleo.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "8xz68lvyn.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "agynrzhix0x.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "dnpv0yfag2yq.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "f8ayn0bi8.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "hsvzelmh.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "lpzzwvu67.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "yysm78ry.3ig8y.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "6290k2y20p7c.68gqg.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "9ls9aurv.68gqg.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "b01dc1os.68gqg.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "bjuwmkbua.68gqg.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "jiivr3ttjm1.68gqg.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "qoxcfxk2qj.68gqg.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "z6ygxysvop.68gqg.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "1sky62pfvfn.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "68ptoie9zy2.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "7vuumgi6utj3.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "b9pd0l47.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "fabm1dd6.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "jgy9nz3cj.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "jytan16luj.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "khsfshcgzv9y.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "lqm6ozuu0nt.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "ls1y3d07xpm.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "msdhl2x0qxf.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "nqf9hyvn.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "o434ox4isvz3.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "shvyg0n1upp.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "tmcrm1pvkr12.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "vphzcm54v34c.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "xfd4gbsdtcb.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "ye60h3ynxmpb.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "zag4l4vb.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "0awf2sau04.pycz4.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "0kq3h19bl6.pycz4.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "a6v3cgt7m1hr.pycz4.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "hk5ohxmq.pycz4.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "ockll7u3dv41.pycz4.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "q796isz4k.pycz4.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "445fwrdw4ga.z4e0u.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "4jfur3ybg8yx.z4e0u.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "4q8hc1sx.z4e0u.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "j81dlj7l.z4e0u.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "joz7xzld8val.z4e0u.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "pf3n9g4ml6i.z4e0u.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "vwg5c0pm.z4e0u.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "z7vds6se.z4e0u.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "6gcg4v1km18.zn55q.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "9k5m7qac.zn55q.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "k55mhtvsh.zn55q.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "6kb0g6dz.2rmu5.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "6vkr6xxji0v.2rmu5.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "06f3feql93.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "17bay252qfmu.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "1p1i5daloa.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "4fms0n3o.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "6znxuei6jl.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "6zv9fyvejrz.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "78wdyt44u1e.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "7w03u4stl.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "98oloswp9tu.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "d3100i42io6.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "dkyuiwm0tvdn.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "ea0dth0ng.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "hemw6v51f.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "iurf0kzn0gl.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "lfbwysph.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "m3cq5x62h.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "m6xgfjqqsyhi.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "mcopdk4hb545.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "n7urm2yxm7bp.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "pfqxb9c8.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "qzm9ffgdq29q.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "r2yhtz834aso.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "rpf9vp92.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "twxptv53jleh.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "wfs7lz0ig4.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "wkmaqj5c9u.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "y4hqr0htbcz.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "zsn6j5czh.7kdvx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "7b4jms3jyg5.lpst4.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "0icsg11efls.rocpx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "pibs7yv2zqf.rocpx.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "14dmp87i0l.t1yjm.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "1b7g672zmpep.t1yjm.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "h9s83jn22hae.t1yjm.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "15v6muxpc1m3.uvtmo.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "opm6keep9kn.uvtmo.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "q2ripsnshpi2.uvtmo.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "vgmer1n6iytd.uvtmo.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "b7fiblipjdis.lpst4.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "n9k3vget.2rmu5.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "f29mtwc2.lpst4.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "lv5boiuu5.jmlvs.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "95l6r1vwnh6.yise6.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "5lvrqzev.uoszu.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "6kdqjgovunu.z4e0u.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "oniiajvf197.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "m97r0gd25r.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "suubjm9jc.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "96uc1q4y.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "r8y0sctr.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "shkwztqn54.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "4wocfrqb02jf.bmysp.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "g668bl5lzq.68gqg.hstatic.io",
+          "outbound": "block"
+        },
+        {
+          "type": "domain",
+          "value": "r9wfhggrai.68gqg.hstatic.io",
+          "outbound": "block"
+        }
+      ]
+    },
     "policies": [
       {
-        "id": "policy-1788339689004",
-        "name": "AI",
-        "icon": "brand:openai-light",
+        "id": "aoxi-ai-platform",
+        "name": "🤖 AI平台",
         "default": "proxy",
-        "rulesets": [
-          "geosite-category-ai-!cn"
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/ai-platform-domain.srs",
+          "https://github.com/aoxijy/guize/releases/latest/download/ai-platform-ipcidr.srs"
         ],
         "domain": [],
         "domainSuffix": [],
@@ -51,12 +608,12 @@
         "ipCidr": []
       },
       {
-        "id": "policy-1788349674530",
-        "name": "Youtube",
-        "icon": "brand:youtube",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-youtube"
+        "id": "aoxi-reject",
+        "name": "🛑 全球拦截",
+        "default": "block",
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/reject-domain.srs"
         ],
         "domain": [],
         "domainSuffix": [],
@@ -64,13 +621,13 @@
         "ipCidr": []
       },
       {
-        "id": "policy-1788503446572",
-        "name": "TikTok",
-        "icon": "brand:tiktok",
+        "id": "aoxi-social-chat",
+        "name": "📲 社交聊天",
         "default": "proxy",
-        "rulesets": [
-          "geosite-tiktok",
-          "geosite-tiktok@!cn"
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/social-chat-domain.srs",
+          "https://github.com/aoxijy/guize/releases/latest/download/social-chat-ipcidr.srs"
         ],
         "domain": [],
         "domainSuffix": [],
@@ -78,13 +635,13 @@
         "ipCidr": []
       },
       {
-        "id": "policy-1788503496373",
-        "name": "Netflix",
-        "icon": "brand:netflix-mono",
+        "id": "aoxi-developer-platform",
+        "name": "💻 开发平台",
         "default": "proxy",
-        "rulesets": [
-          "geosite-netflix",
-          "geoip-netflix"
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/developer-platform-domain.srs",
+          "https://github.com/aoxijy/guize/releases/latest/download/developer-platform-ipcidr.srs"
         ],
         "domain": [],
         "domainSuffix": [],
@@ -92,12 +649,13 @@
         "ipCidr": []
       },
       {
-        "id": "policy-1788467369681",
-        "name": "Github",
-        "icon": "brand:github-mono",
+        "id": "aoxi-microsoft-apple",
+        "name": "Ⓜ️ 微软苹果",
         "default": "proxy",
-        "rulesets": [
-          "geosite-github"
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/microsoft-apple-domain.srs",
+          "https://github.com/aoxijy/guize/releases/latest/download/microsoft-apple-ipcidr.srs"
         ],
         "domain": [],
         "domainSuffix": [],
@@ -105,12 +663,13 @@
         "ipCidr": []
       },
       {
-        "id": "policy-1788338176669",
-        "name": "Google",
-        "icon": "brand:google",
+        "id": "aoxi-foreign-media",
+        "name": "🎥 国外媒体",
         "default": "proxy",
-        "rulesets": [
-          "geosite-google"
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/foreign-media-domain.srs",
+          "https://github.com/aoxijy/guize/releases/latest/download/foreign-media-ipcidr.srs"
         ],
         "domain": [],
         "domainSuffix": [],
@@ -118,76 +677,13 @@
         "ipCidr": []
       },
       {
-        "id": "policy-1788339749192",
-        "name": "Microsoft",
-        "icon": "brand:microsoft",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-microsoft"
-        ],
-        "domain": [],
-        "domainSuffix": [],
-        "domainKeyword": [],
-        "ipCidr": []
-      },
-      {
-        "id": "policy-1788367850896",
-        "name": "Apple",
-        "icon": "brand:apple-light",
+        "id": "aoxi-direct",
+        "name": "🎯 全球直连",
         "default": "direct",
-        "rulesets": [
-          "geosite-apple"
-        ],
-        "domain": [],
-        "domainSuffix": [],
-        "domainKeyword": [],
-        "ipCidr": []
-      },
-      {
-        "id": "policy-1788368131895",
-        "name": "Games",
-        "icon": "misc:game-soft",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-steam",
-          "geosite-sony"
-        ],
-        "domain": [],
-        "domainSuffix": [],
-        "domainKeyword": [],
-        "ipCidr": []
-      },
-      {
-        "id": "policy-1788494862755",
-        "name": "国外",
-        "icon": "globe:earth-americas",
-        "default": "proxy",
-        "rulesets": [
-          "geosite-gfw",
-          "geoip-cloudflare",
-          "geoip-facebook",
-          "geoip-cloudfront",
-          "geoip-fastly",
-          "geoip-google",
-          "geoip-netflix",
-          "geoip-telegram",
-          "geoip-tor",
-          "geoip-twitter"
-        ],
-        "domain": [],
-        "domainSuffix": [],
-        "domainKeyword": [],
-        "ipCidr": []
-      },
-      {
-        "id": "policy-1788341212171",
-        "name": "国内",
-        "icon": "misc:shield",
-        "default": "direct",
-        "rulesets": [
-          "geosite-cn",
-          "geoip-cn",
-          "geoip-private"
+        "rulesets": [],
+        "ruleUrls": [
+          "https://github.com/aoxijy/guize/releases/latest/download/direct-domain.srs",
+          "https://github.com/aoxijy/guize/releases/latest/download/direct-ipcidr.srs"
         ],
         "domain": [],
         "domainSuffix": [],
@@ -196,10 +692,8 @@
       }
     ],
     "adBlock": false,
-    "adRuleset": "geosite-category-ads-all",
-    "regionId": "cn",
-    "fallbackDefault": "direct",
-    "fallbackName": "其他",
+    "fallbackDefault": "proxy",
+    "fallbackName": "🐟 漏网之鱼",
     "fallbackIcon": "globe:generic"
   }
 }

@@ -1,3 +1,4 @@
+import { migrateDefaultProfile } from '../system/seed-defaults.mjs'
 import { randomBytes } from 'node:crypto'
 import { BUILTIN_REGIONS } from '../engine/routing-model.mjs'
 import { defaultGroups, normalizeGroups } from '../engine/user-groups.mjs'
@@ -105,7 +106,12 @@ export const createStore = ({ get, set, del }, { randomHex = defaultRandomHex } 
 
   const getProfile = () => {
     const raw = get(KEYS.profile)
-    const stored = parseJsonOr(raw, {})
+    const original = parseJsonOr(raw, {})
+    const stored = migrateDefaultProfile(original)
+    if (stored !== original) {
+      if (!get('jbox/profile-before-aoxi-routing-v1')) set('jbox/profile-before-aoxi-routing-v1', raw)
+      set(KEYS.profile, JSON.stringify(stored))
+    }
     const profile = deepMerge(DEFAULT_PROFILE, isPlainObject(stored) ? stored : {})
     if (isPlainObject(profile.updates)) delete profile.updates.geo
     return profile
