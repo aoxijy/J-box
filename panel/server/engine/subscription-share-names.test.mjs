@@ -18,7 +18,7 @@ test('shares use the same automatic names, manual overrides and current prefix a
   const expected = new Map(imported.renamed.map((node) => [node.originalTag, node.tag]))
   const output = applySubscriptionShareNames(content, sub)
   assert.deepEqual(names(output), parseSubscription(content).nodes.map((node) => expected.get(node.originalTag)))
-  assert.deepEqual(names(output), ['机场 | 香港-001', '机场 | 日本-001', '机场 | 家里 $&', '机场 | 香港-002'])
+  assert.deepEqual(names(output), ['GQRU-机场 | 香港-001', 'GQRU-机场 | 日本-001', 'GQRU-机场 | 家里 $&', 'GQRU-机场 | 香港-002'])
   assert.deepEqual(output.split('\n').map((line) => line.split('#')[0]), content.split('\n').map((line) => line.split('#')[0]))
 })
 
@@ -30,7 +30,7 @@ test('unconfigured or disabled renaming preserves originals; manual names and pr
   const output = applySubscriptionShareNames(content, { name: '自建', renameOptions: {
     enabled: false, usePrefix: true, overrides: { '🇭🇰香港01': '家宽' },
   } })
-  assert.deepEqual(names(output), ['自建 | 家宽', '自建 | 原名 & 中文'])
+  assert.deepEqual(names(output), ['GQRU-自建 | 家宽', 'GQRU-自建 | 原名 & 中文'])
 })
 
 test('existing nodes use their final panel names and never take names from another subscription', () => {
@@ -65,9 +65,9 @@ test('Clash names and group, dialer and rule references change together without 
   const doc = { proxies: [proxy], 'proxy-groups': [{ name: '手动', type: 'select', proxies: ['香港A', 'DIRECT'] }],
     rules: ['DOMAIN,example.com,香港A', 'IP-CIDR,10.0.0.0/8,香港A,no-resolve', 'MATCH,手动'] }
   const output = YAML.parse(applySubscriptionShareNames(YAML.stringify(doc), { name: '机场', renameOptions: { enabled: true, usePrefix: true } }))
-  assert.deepEqual(output.proxies, [{ ...proxy, name: '机场 | 香港-01', 'dialer-proxy': '机场 | 香港-01' }])
-  assert.deepEqual(output['proxy-groups'][0].proxies, ['机场 | 香港-01', 'DIRECT'])
-  assert.deepEqual(output.rules, ['DOMAIN,example.com,机场 | 香港-01', 'IP-CIDR,10.0.0.0/8,机场 | 香港-01,no-resolve', 'MATCH,手动'])
+  assert.deepEqual(output.proxies, [{ ...proxy, name: 'GQRU-机场 | 香港-01', 'dialer-proxy': 'GQRU-机场 | 香港-01' }])
+  assert.deepEqual(output['proxy-groups'][0].proxies, ['GQRU-机场 | 香港-01', 'DIRECT'])
+  assert.deepEqual(output.rules, ['DOMAIN,example.com,GQRU-机场 | 香港-01', 'IP-CIDR,10.0.0.0/8,GQRU-机场 | 香港-01,no-resolve', 'MATCH,手动'])
 })
 
 test('sing-box node tags, selector defaults, detours and routing references stay consistent', () => {

@@ -81,10 +81,10 @@ test('public share applies current per-subscription naming after decoding and be
     store.setSubscriptionShares([{ id: 'share', token: 'a'.repeat(48), name: '聚合', subscriptionIds: ['one', 'two'] }])
     const response = await fetch(`${base}/sub/${'a'.repeat(48)}`)
     assert.equal(response.status, 200)
-    assert.deepEqual(parseSubscription(await response.text()).nodes.map((node) => node.tag), ['机场 | 香港-01', '香港A'])
+    assert.deepEqual(parseSubscription(await response.text()).nodes.map((node) => node.tag), ['GQRU-机场 | 香港-01', '香港A'])
     store.setSubscriptions([{ ...subscriptions[0], name: '新名称' }, subscriptions[1]])
     const updated = await fetch(`${base}/sub/${'a'.repeat(48)}`)
-    assert.deepEqual(parseSubscription(await updated.text()).nodes.map((node) => node.tag), ['新名称 | 香港-01', '香港A'])
+    assert.deepEqual(parseSubscription(await updated.text()).nodes.map((node) => node.tag), ['GQRU-新名称 | 香港-01', '香港A'])
   } finally { await close() }
 })
 
