@@ -21,6 +21,7 @@ test('buildConfig 顶层结构', () => {
   const c = buildConfig({ nodes, regionGroups, profile })
   assert.equal(c.log.level, 'warn')
   assert.equal(c.inbounds[0].type, 'tun')
+  assert.equal(c.inbounds[0].interface_name, 'jbox-tun', 'do not consume EasyTier default tun0')
   assert.equal(c.inbounds[0].address.length, 2)                     // v4 + v6
   assert.equal(c.experimental.clash_api.external_controller, '127.0.0.1:9095')
   assert.equal(c.experimental.clash_api.secret, 's3cr3t')

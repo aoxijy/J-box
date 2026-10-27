@@ -208,7 +208,7 @@ export const buildConfig = ({ nodes, profile, userGroups, systemDns, localSubnet
   }
   const routeExclude = subtractCidrs(excludeBase, holes)
   const tunInbound = {
-    type: 'tun', tag: 'tun-in', address: tunAddress,
+    type: 'tun', tag: 'tun-in', interface_name: 'jbox-tun', address: tunAddress,
     // 单栈 tun + strict_route 会在 nft / ip rule 层拒绝未接管的地址族。
     // bypass 要让原生 IPv6（含 DHCPv6、RA）继续按系统路由走;其余模式保留严格路由。
     auto_route: true, strict_route: ipv6ProxyMode(profile) !== 'bypass', stack: 'mixed',
