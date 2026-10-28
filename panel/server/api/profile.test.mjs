@@ -171,12 +171,13 @@ test('GET /api/jbox/profile 返回默认 profile(地区种子已翻译成站点�
     const { routing, ...rest } = body.profile
     const { routing: defRouting, ...defRest } = DEFAULT_PROFILE
     assert.deepEqual(rest, defRest)
-    assert.deepEqual({ ...routing, policies: undefined, fallbackDefault: undefined },
-                     { ...defRouting, policies: undefined, fallbackDefault: undefined })
+    assert.deepEqual({ ...routing, policies: undefined, fallbackDefault: undefined, displayOrder: undefined },
+                     { ...defRouting, policies: undefined, fallbackDefault: undefined, displayOrder: undefined })
     // 全新安装的默认:中国站点直连,其余走代理
     assert.deepEqual(routing.policies.map((p) => [p.name, p.default, p.rulesets]),
                      [['中国大陆·直连', 'direct', ['geosite-cn', 'geoip-cn']]])
     assert.equal(routing.fallbackDefault, 'proxy')
+    assert.deepEqual(routing.displayOrder, ['中国大陆·直连', '其他'])
   } finally {
     await close()
   }

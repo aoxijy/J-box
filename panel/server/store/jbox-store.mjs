@@ -101,6 +101,19 @@ const parseJsonOr = (raw, fallback) => {
 
 const defaultRandomHex = () => randomBytes(16).toString('hex')
 
+// Target routing is the source of truth; stale card order must never mask it.
+const syncRoutingOrder = (profile) => {
+  const routing = profile.routing
+  if (!Array.isArray(routing?.policies) || !routing.policies.length) return profile
+  routing.policies = routing.policies.map(({ inlinePriority, ...policy }) => policy)
+  routing.displayOrder = [
+    ...routing.policies.filter((p) => p.name && p.enabled !== false).map((p) => p.name),
+    routing.fallbackName?.trim() || '其他',
+  ]
+  return profile
+}
+
+
 export const createStore = ({ get, set, del }, { randomHex = defaultRandomHex } = {}) => {
   void del // 当前接口未暴露删除操作,保留注入以便未来使用/测试对称性。
 
@@ -114,20 +127,11 @@ export const createStore = ({ get, set, del }, { randomHex = defaultRandomHex } 
     }
     const profile = deepMerge(DEFAULT_PROFILE, isPlainObject(stored) ? stored : {})
     if (isPlainObject(profile.updates)) delete profile.updates.geo
-    return profile
+    return syncRoutingOrder(profile)
   }
 
   const setProfile = (patch) => {
-    const previous = getProfile()
-    const merged = deepMerge(previous, patch || {})
-    // A target-routing reorder also updates policy cards. Otherwise a saved
-    // displayOrder masks the new order indefinitely, even after a page reload.
-    if (Array.isArray(patch?.routing?.policies) && !('displayOrder' in patch.routing)) {
-      const names = (routing) => (routing.policies || []).filter((p) => p.name && p.enabled !== false).map((p) => p.name)
-      if (JSON.stringify(names(previous.routing)) !== JSON.stringify(names(merged.routing))) {
-        merged.routing.displayOrder = [...names(merged.routing), merged.routing.fallbackName?.trim() || '其他']
-      }
-    }
+    const merged = syncRoutingOrder(deepMerge(getProfile(), patch || {}))
     if (isPlainObject(merged.updates)) delete merged.updates.geo
     set(KEYS.profile, JSON.stringify(merged))
     return merged

@@ -132,7 +132,6 @@ export const defaultGroups = () => {
     testUrl: 'https://www.gstatic.com/generate_204', idleTimeout: DEFAULT_IDLE_TIMEOUT, ...extra,
   })
   return [
-    builtinDefaults()[0],
     auto('aoxi-chatgpt-auto', '🕸️ CHATGPT自动', ['美国', '其他', 'US', 'United States'], { interval: '300s', tolerance: 200, testUrl: 'http://chatgpt.com/cdn-cgi/trace' }),
     { id: 'all-manual', name: '💁 所有手动', type: 'selector', mode: 'dynamic', icon: 'globe:earth-meridians', keywords: [], members: [], enabled: true },
     auto('all-auto', '♻️ 自动选择'),
@@ -140,6 +139,7 @@ export const defaultGroups = () => {
     auto('aoxi-asia-auto', '♻️ 亚洲自动', ['亚洲', '日本', '新加坡', '台湾', '韩国', 'JP', 'SG', 'TW', 'KR', 'Asia', 'Japan', 'Singapore', 'Taiwan', 'Korea']),
     auto('aoxi-us-auto', '♻️ 美国自动', ['美国', 'US', 'United States'], { icon: 'US' }),
     auto('aoxi-other-auto', '♻️ 其他自动', ['其他']),
+    builtinDefaults()[0],
     builtinDefaults()[1],
   ]
 }

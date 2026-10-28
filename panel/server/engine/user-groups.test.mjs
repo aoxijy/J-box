@@ -282,7 +282,7 @@ test('图标不进 sing-box 出站:那边没有这个字段', () => {
 })
 
 test('默认列表与 YAML 的七个节点组同名同序,保留两个内置出站', () => {
-  assert.deepEqual(defaultGroups().map((g) => g.name), ['直连', '🕸️ CHATGPT自动', '💁 所有手动', '♻️ 自动选择', '♻️ 香港自动', '♻️ 亚洲自动', '♻️ 美国自动', '♻️ 其他自动', '拒绝'])
+  assert.deepEqual(defaultGroups().map((g) => g.name), ['🕸️ CHATGPT自动', '💁 所有手动', '♻️ 自动选择', '♻️ 香港自动', '♻️ 亚洲自动', '♻️ 美国自动', '♻️ 其他自动', '直连', '拒绝'])
   assert.ok(defaultGroups().every((g) => g.icon))
 })
 

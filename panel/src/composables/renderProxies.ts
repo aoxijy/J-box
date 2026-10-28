@@ -2,6 +2,7 @@ import { NOT_CONNECTED, PROXY_SORT_TYPE } from '@/constant'
 import { isProxyGroup } from '@/helper'
 import { getLatencyByName, proxiesFilter } from '@/store/proxies'
 import { hideUnavailableProxies, proxySortType, useSmartGroupSort } from '@/store/settings'
+import { managedOutbounds, siteSetNames } from '@/store/jboxSiteSets'
 import { smartOrderMap } from '@/store/smart'
 import { computed, type ComputedRef } from 'vue'
 
@@ -48,6 +49,15 @@ const getRenderProxies = (proxies: string[], groupName?: string) => {
       name = name.toLowerCase()
       return filters.every((f) => name.includes(f))
     })
+  }
+
+  // Policy members follow Settings > Outbound nodes, including direct/reject.
+  // Latency/name sorting remains available for actual node groups.
+  if (groupName && siteSetNames.value.has(groupName)) {
+    const order = new Map(managedOutbounds.value.map((g, i) => [g.name, i]))
+    return proxies.sort((a, b) =>
+      (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER),
+    )
   }
 
   if (useSmartGroupSort.value && smartOrderMap.value[groupName!]) {

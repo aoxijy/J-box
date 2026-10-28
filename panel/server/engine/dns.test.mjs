@@ -410,3 +410,14 @@ test('F2:IPv6 不进内核(bypass)+ FakeIP:占位只管 A,AAAA 继续交给真�
   const v4 = fake({ ipv6Proxy: 'ipv4' })
   assert.deepEqual(rulesFor(v4).map((r) => [r.server || r.action, r.query_type || null]), [['predefined', ['AAAA']], ['dns-fakeip', ['A']], ['dns-policy-0', null]])
 })
+
+test('DNS inline block conditions follow target policy order', () => {
+  const dns = buildDns(withRouting({ policies: [
+    { id: 'ai', name: 'AI', domainSuffix: ['overlap.test'] },
+    { id: 'block', name: 'Block', default: 'block', inlinePriority: true, domainSuffix: ['overlap.test'] },
+  ] }), { groupTags: ['direct', 'block', 'proxy'] })
+  const rules = dns.rules.filter((r) => r.domain_suffix?.includes('overlap.test'))
+  assert.equal(rules.length, 2)
+  assert.equal(rules[0].server, 'dns-direct')
+  assert.equal(rules[1].server, 'dns-policy-1')
+})

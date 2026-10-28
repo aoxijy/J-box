@@ -394,3 +394,11 @@ test('预解析(第五轮 任务 4):只有当按目标 IP 判的规则排在某�
   // 没给解析器映射(老调用方 / 预览):不插
   assert.ok(!build({ policies: [{ id: 'ip', name: '纯IP', rulesets: ['geoip-x'] }, { id: 'g', name: '谷歌', rulesets: ['geosite-google'] }] }).route.rules.some((r) => r.action === 'resolve'))
 })
+
+test('imported block inline conditions stay at the configured policy position', () => {
+  const { route } = build({ fallbackDefault: 'proxy', policies: [
+    { id: 'ai', name: 'AI', domainSuffix: ['overlap.test'] },
+    { id: 'block', name: 'Block', inlinePriority: true, domainSuffix: ['overlap.test'], rulesets: ['geosite-ads'] },
+  ] })
+  assert.deepEqual(route.rules.filter((r) => ['AI', 'Block'].includes(r.outbound)).map((r) => r.outbound), ['AI', 'Block', 'Block'])
+})

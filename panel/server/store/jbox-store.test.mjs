@@ -50,7 +50,7 @@ test('target policy reorder updates saved card order and keeps fallback last', (
   assert.deepEqual(store.getProfile().routing.displayOrder, updated.routing.displayOrder)
   store.setProfile({ routing: { displayOrder: ['Direct', 'AI', 'Block', 'Catch all'] } })
   store.setProfile({ routing: { policies: reordered.map(p => ({ ...p, default: 'DIRECT' })) } })
-  assert.deepEqual(store.getProfile().routing.displayOrder, ['Direct', 'AI', 'Block', 'Catch all'])
+  assert.deepEqual(store.getProfile().routing.displayOrder, ['AI', 'Direct', 'Block', 'Catch all'])
 })
 
 test('老数据缺新字段时用默认补齐', () => {
@@ -147,4 +147,15 @@ test('旧数据或旧备份的 Geo 自动更新计划退出使用，其他更新
   assert.equal(imported.updates.geo, undefined)
   assert.equal(imported.updates.jbox.auto, true)
   assert.equal(imported.dns.filter.autoUpdate.enabled, true)
+})
+
+test('stored stale display order and imported inline priority cannot override target order', () => {
+  const { store, m } = memStore()
+  m.set(KEYS.profile, JSON.stringify({ routing: { policies: [
+    { name: 'AI' }, { name: 'Disabled', enabled: false }, { name: 'Block', inlinePriority: true },
+  ], fallbackName: 'Catch all', displayOrder: ['Block', 'AI'] } }))
+  const profile = store.getProfile()
+  assert.deepEqual(profile.routing.displayOrder, ['AI', 'Block', 'Catch all'])
+  assert.ok(profile.routing.policies.every((p) => !('inlinePriority' in p)))
+  assert.deepEqual(store.setProfile({ routing: { fallbackName: 'Rest' } }).routing.displayOrder, ['AI', 'Block', 'Rest'])
 })
