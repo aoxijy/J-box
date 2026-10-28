@@ -118,7 +118,16 @@ export const createStore = ({ get, set, del }, { randomHex = defaultRandomHex } 
   }
 
   const setProfile = (patch) => {
-    const merged = deepMerge(getProfile(), patch || {})
+    const previous = getProfile()
+    const merged = deepMerge(previous, patch || {})
+    // A target-routing reorder also updates policy cards. Otherwise a saved
+    // displayOrder masks the new order indefinitely, even after a page reload.
+    if (Array.isArray(patch?.routing?.policies) && !('displayOrder' in patch.routing)) {
+      const names = (routing) => (routing.policies || []).filter((p) => p.name && p.enabled !== false).map((p) => p.name)
+      if (JSON.stringify(names(previous.routing)) !== JSON.stringify(names(merged.routing))) {
+        merged.routing.displayOrder = [...names(merged.routing), merged.routing.fallbackName?.trim() || '其他']
+      }
+    }
     if (isPlainObject(merged.updates)) delete merged.updates.geo
     set(KEYS.profile, JSON.stringify(merged))
     return merged

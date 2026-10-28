@@ -40,6 +40,19 @@ test('setProfile 返回合并结果', () => {
   assert.deepEqual(returned, store.getProfile())
 })
 
+test('target policy reorder updates saved card order and keeps fallback last', () => {
+  const { store } = memStore()
+  const policies = [{ name: 'AI' }, { name: 'Block' }, { name: 'Direct' }]
+  store.setProfile({ routing: { policies, fallbackName: 'Catch all', displayOrder: ['Block', 'AI', 'Catch all', 'Direct'] } })
+  const reordered = [policies[0], policies[2], policies[1]]
+  const updated = store.setProfile({ routing: { policies: reordered } })
+  assert.deepEqual(updated.routing.displayOrder, ['AI', 'Direct', 'Block', 'Catch all'])
+  assert.deepEqual(store.getProfile().routing.displayOrder, updated.routing.displayOrder)
+  store.setProfile({ routing: { displayOrder: ['Direct', 'AI', 'Block', 'Catch all'] } })
+  store.setProfile({ routing: { policies: reordered.map(p => ({ ...p, default: 'DIRECT' })) } })
+  assert.deepEqual(store.getProfile().routing.displayOrder, ['Direct', 'AI', 'Block', 'Catch all'])
+})
+
 test('老数据缺新字段时用默认补齐', () => {
   const { store, m } = memStore()
   m.set(KEYS.profile, JSON.stringify({ ipv6: false }))
